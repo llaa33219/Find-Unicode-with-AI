@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Unicode with AI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">Find Unicode with AI</h1>
+            <p class="subtitle">AI를 활용해 원하는 유니코드 문자를 쉽게 찾아보세요</p>
+        </header>
+
+        <main class="main">
+            <div class="search-section">
+                <div class="input-container">
+                    <textarea 
+                        id="searchInput" 
+                        placeholder="찾고자 하는 문자를 설명해주세요. 예: '웃는 얼굴 이모지', '수학 기호 중 적분', '화살표 모양' 등"
+                        rows="3"
+                    ></textarea>
+                    <button id="searchBtn" class="search-btn">
+                        <span class="btn-text">검색</span>
+                        <div class="loading-spinner" style="display: none;"></div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="progressSection" class="progress-section" style="display: none;">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">분석 중...</div>
+                </div>
+            </div>
+
+            <div id="analysisSection" class="analysis-section" style="display: none;">
+                <h3>분석 결과</h3>
+                <div class="criteria-grid" id="criteriaGrid">
+                    <!-- AI 분석 결과가 여기에 표시됩니다 -->
+                </div>
+            </div>
+
+            <div id="resultsSection" class="results-section" style="display: none;">
+                <h3>찾은 유니코드 문자</h3>
+                <div class="results-grid" id="resultsGrid">
+                    <!-- 결과가 여기에 표시됩니다 -->
+                </div>
+            </div>
+
+            <div id="errorSection" class="error-section" style="display: none;">
+                <div class="error-message" id="errorMessage"></div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>Powered by Qwen AI | Cloudflare Pages</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
