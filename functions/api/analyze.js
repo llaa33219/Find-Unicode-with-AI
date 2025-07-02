@@ -41,17 +41,17 @@ Return EXACTLY this JSON structure:
   "primary_criterion": "range|shape|function|name",
   "criteria": {
     "range": {
-      "type": "emoji|math|arrows|geometric|punctuation|currency|symbols|null",
+      "type": "AI_determined_range_category_or_null",
       "keywords": ["keyword1", "keyword2"],
       "confidence": 0.0|1.0
     },
     "shape": {
-      "type": "circle|square|triangle|star|heart|diamond|arrow|line|cross|null",
+      "type": "AI_determined_shape_category_or_null",
       "keywords": ["keyword1", "keyword2"],
       "confidence": 0.0|1.0
     },
     "function": {
-      "type": "separator|punctuation|currency|math_operator|emphasis|decoration|null",
+      "type": "AI_determined_function_category_or_null",
       "keywords": ["keyword1", "keyword2"],
       "confidence": 0.0|1.0
     },
@@ -71,6 +71,12 @@ CRITICAL RULES:
 6. "keywords" should be 1-3 most relevant English terms for the PRIMARY criterion only
 7. Only use "shape" if query explicitly mentions VISUAL APPEARANCE or LOOKS LIKE something
 
+AI FREEDOM FOR TYPE FIELDS:
+- For "range": Create your own category names like "facial_emojis", "mathematical_symbols", "korean_characters", "punctuation_marks", etc.
+- For "shape": Create your own shape descriptions like "circular", "oval_face", "triangular_point", "linear_bar", "cross_pattern", etc.
+- For "function": Create your own function descriptions like "text_separator", "mathematical_operator", "currency_indicator", "emphasis_marker", etc.
+- DO NOT limit yourself to predefined categories - be creative and specific!
+
 DECISION PRIORITY:
 1. If query mentions "looks like", "similar to", "shape of", "모양" → PRIMARY: shape
 2. If query mentions specific Unicode ranges (emoji, math, etc.) → PRIMARY: range  
@@ -79,11 +85,11 @@ DECISION PRIORITY:
 
 EXAMPLES:
 - "heart symbol" → PRIMARY: name (searching by name "heart")
-- "heart shaped character" → PRIMARY: shape (searching by visual heart shape)
-- "mathematical plus sign" → PRIMARY: range (math symbols)
-- "punctuation marks" → PRIMARY: function (punctuation function)
-- "나무 모양" → PRIMARY: shape (visual tree shape)
-- "tree character" → PRIMARY: name (searching by name "tree")
+- "heart shaped character" → PRIMARY: shape (type: "heart_like", keywords: ["heart", "curved"])
+- "mathematical plus sign" → PRIMARY: range (type: "mathematical_operators", keywords: ["math", "plus"])
+- "punctuation marks" → PRIMARY: function (type: "text_punctuation", keywords: ["punctuation"])
+- "얼굴 모양" → PRIMARY: shape (type: "facial_oval", keywords: ["face", "oval"])
+- "이모지 얼굴" → PRIMARY: range (type: "facial_emojis", keywords: ["emoji", "face"])
 
 Respond with ONLY the JSON, no additional text.`
                     },
