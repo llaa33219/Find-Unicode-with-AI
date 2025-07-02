@@ -10,6 +10,42 @@ const resultsSection = document.getElementById('resultsSection');
 const resultsContainer = document.getElementById('resultsGrid');
 const errorSection = document.getElementById('errorSection');
 const errorMessage = document.getElementById('errorMessage');
+const themeToggleBtn = document.getElementById('themeToggle');
+const themeIcon = themeToggleBtn.querySelector('.theme-icon');
+
+// Theme functionality
+let currentTheme = localStorage.getItem('theme') || 'light';
+
+function initTheme() {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    updateThemeIcon();
+}
+
+function toggleTheme() {
+    currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('theme', currentTheme);
+    updateThemeIcon();
+    
+    // Add bounce animation to the button
+    themeToggleBtn.style.animation = 'none';
+    setTimeout(() => {
+        themeToggleBtn.style.animation = '';
+    }, 10);
+}
+
+function updateThemeIcon() {
+    themeIcon.textContent = currentTheme === 'light' ? '🌙' : '☀️';
+}
+
+// Add floating animation to particles
+function animateParticles() {
+    const particles = document.querySelectorAll('.particle');
+    particles.forEach((particle, index) => {
+        const delay = index * 2000;
+        particle.style.animationDelay = `${delay}ms`;
+    });
+}
 
 // Event listeners
 searchBtn.addEventListener('click', handleSearch);
@@ -17,6 +53,13 @@ searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         handleSearch();
     }
+});
+themeToggleBtn.addEventListener('click', toggleTheme);
+
+// Initialize theme and animations
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    animateParticles();
 });
 
 // Main search handler
