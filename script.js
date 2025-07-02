@@ -195,7 +195,7 @@ function displayResults(results) {
         return;
     }
 
-    resultsContainer.innerHTML = results.map(result => `
+    resultsContainer.innerHTML = results.map((result, index) => `
         <div class="result-item">
             <div class="result-header">
                 <div class="result-char">${result.char}</div>
@@ -210,10 +210,19 @@ function displayResults(results) {
             </div>
             <div class="result-description">${result.analysis}</div>
             <div class="result-actions">
-                <button class="copy-btn" onclick="copyCharacter('${result.char}', this)">문자 복사</button>
+                <button class="copy-btn" data-char="${result.char}" data-index="${index}">문자 복사</button>
             </div>
         </div>
     `).join('');
+
+    // Add event listeners to copy buttons
+    const copyButtons = resultsContainer.querySelectorAll('.copy-btn');
+    copyButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const char = this.getAttribute('data-char');
+            copyCharacter(char, this);
+        });
+    });
 
     resultsSection.style.display = 'block';
 }
