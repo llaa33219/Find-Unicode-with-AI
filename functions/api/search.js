@@ -2,365 +2,508 @@
 export async function onRequestPost(context) {
     try {
         const { request } = context;
-        const { analysis } = await request.json();
+        const { criteria } = await request.json();
 
-        if (!analysis || !analysis.criteria || !Array.isArray(analysis.criteria)) {
+        if (!criteria || typeof criteria !== 'object') {
             return new Response(JSON.stringify({
-                error: '유효한 분석 결과가 필요합니다.'
+                error: 'Valid search criteria is required'
             }), {
                 status: 400,
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                }
             });
         }
 
         let allCandidates = [];
 
-        // 각 기준에 따라 검색 수행
-        for (const criterion of analysis.criteria) {
-            const candidates = await searchByCriterion(criterion);
+        // Search by each criterion
+        if (criteria.range && criteria.range.type) {
+            const candidates = searchByRange(criteria.range);
             allCandidates = allCandidates.concat(candidates);
         }
 
-        // 중복 제거 (유니코드 포인트 기준)
+        if (criteria.shape && criteria.shape.type) {
+            const candidates = searchByShape(criteria.shape);
+            allCandidates = allCandidates.concat(candidates);
+        }
+
+        if (criteria.function && criteria.function.type) {
+            const candidates = searchByFunction(criteria.function);
+            allCandidates = allCandidates.concat(candidates);
+        }
+
+        if (criteria.name && criteria.name.keywords && criteria.name.keywords.length > 0) {
+            const candidates = searchByName(criteria.name);
+            allCandidates = allCandidates.concat(candidates);
+        }
+
+        // Remove duplicates (based on Unicode code point)
         const uniqueCandidates = removeDuplicates(allCandidates);
         
-        // 최대 50개로 제한
+        // Limit to maximum 50 results
         const limitedCandidates = uniqueCandidates.slice(0, 50);
 
         return new Response(JSON.stringify({
-            candidates: limitedCandidates,
+            results: limitedCandidates,
             total: uniqueCandidates.length
         }), {
             headers: { 
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
             }
         });
 
     } catch (error) {
-        console.error('검색 API 오류:', error);
+        console.error('Search error:', error);
         
         return new Response(JSON.stringify({
-            error: '검색 중 오류가 발생했습니다.',
+            error: 'Search error occurred',
             details: error.message
         }), {
             status: 500,
             headers: { 
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
             }
         });
     }
 }
 
-// CORS 처리를 위한 OPTIONS 핸들러
+// CORS handler for OPTIONS requests
 export async function onRequestOptions() {
     return new Response(null, {
         headers: {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }
     });
 }
 
-// 기준에 따른 검색 함수
-async function searchByCriterion(criterion) {
-    const { type, keywords } = criterion;
-    let candidates = [];
-
+// Search by range (Unicode blocks)
+function searchByRange(rangeObj) {
+    const { type, keywords } = rangeObj;
+    const candidates = [];
+    
     switch (type) {
-        case '범위':
-            candidates = searchByRange(keywords);
+        case 'emoji':
+            candidates.push(...getEmojiCharacters());
             break;
-        case '모양':
-            candidates = searchByShape(keywords);
+        case 'math':
+            candidates.push(...getMathematicalCharacters());
             break;
-        case '기능':
-            candidates = searchByFunction(keywords);
+        case 'arrows':
+            candidates.push(...getArrowCharacters());
             break;
-        case '이름':
-            candidates = searchByName(keywords);
+        case 'geometric':
+            candidates.push(...getGeometricCharacters());
+            break;
+        case 'punctuation':
+            candidates.push(...getPunctuationCharacters());
+            break;
+        case 'currency':
+            candidates.push(...getCurrencyCharacters());
             break;
         default:
-            // 기본적으로 이름으로 검색
-            candidates = searchByName(keywords);
-    }
-
-    return candidates;
-}
-
-// 범위별 검색 (유니코드 블록 기반)
-function searchByRange(keywords) {
-    const candidates = [];
-    
-    for (const keyword of keywords) {
-        const lowerKeyword = keyword.toLowerCase();
-        
-        // 이모지 관련
-        if (lowerKeyword.includes('emoji') || lowerKeyword.includes('이모지') || 
-            lowerKeyword.includes('emoticon') || lowerKeyword.includes('face') || 
-            lowerKeyword.includes('얼굴') || lowerKeyword.includes('표정')) {
-            
-            // 주요 이모지 범위
-            candidates.push(...getEmojiCharacters());
-        }
-        
-        // 수학 기호
-        if (lowerKeyword.includes('math') || lowerKeyword.includes('수학') ||
-            lowerKeyword.includes('mathematical') || lowerKeyword.includes('기호')) {
-            candidates.push(...getMathematicalCharacters());
-        }
-        
-        // 화살표
-        if (lowerKeyword.includes('arrow') || lowerKeyword.includes('화살표')) {
-            candidates.push(...getArrowCharacters());
-        }
-        
-        // 기하학적 모양
-        if (lowerKeyword.includes('geometric') || lowerKeyword.includes('기하') ||
-            lowerKeyword.includes('shape') || lowerKeyword.includes('모양')) {
-            candidates.push(...getGeometricCharacters());
-        }
+            // Fallback: search by keywords
+            for (const keyword of keywords) {
+                candidates.push(...searchByNamePattern(keyword));
+            }
     }
     
     return candidates;
 }
 
-// 모양별 검색
-function searchByShape(keywords) {
+// Search by shape
+function searchByShape(shapeObj) {
+    const { type, keywords } = shapeObj;
     const candidates = [];
     
-    for (const keyword of keywords) {
-        const lowerKeyword = keyword.toLowerCase();
-        
-        if (lowerKeyword.includes('circle') || lowerKeyword.includes('둥근') || 
-            lowerKeyword.includes('원')) {
+    switch (type) {
+        case 'circle':
             candidates.push(...getCircleShapes());
-        }
-        
-        if (lowerKeyword.includes('square') || lowerKeyword.includes('사각') ||
-            lowerKeyword.includes('box') || lowerKeyword.includes('네모')) {
+            break;
+        case 'square':
             candidates.push(...getSquareShapes());
-        }
-        
-        if (lowerKeyword.includes('triangle') || lowerKeyword.includes('삼각') ||
-            lowerKeyword.includes('세모')) {
+            break;
+        case 'triangle':
             candidates.push(...getTriangleShapes());
-        }
-        
-        if (lowerKeyword.includes('star') || lowerKeyword.includes('별')) {
+            break;
+        case 'star':
             candidates.push(...getStarShapes());
-        }
+            break;
+        case 'heart':
+            candidates.push(...getHeartShapes());
+            break;
+        case 'diamond':
+            candidates.push(...getDiamondShapes());
+            break;
+        case 'arrow':
+            candidates.push(...getArrowCharacters());
+            break;
+        default:
+            // Fallback: search by keywords
+            for (const keyword of keywords) {
+                candidates.push(...searchByNamePattern(keyword));
+            }
     }
     
     return candidates;
 }
 
-// 기능별 검색
-function searchByFunction(keywords) {
+// Search by function
+function searchByFunction(functionObj) {
+    const { type, keywords } = functionObj;
     const candidates = [];
     
-    for (const keyword of keywords) {
-        const lowerKeyword = keyword.toLowerCase();
-        
-        if (lowerKeyword.includes('punctuation') || lowerKeyword.includes('구분') ||
-            lowerKeyword.includes('separator') || lowerKeyword.includes('구두점')) {
+    switch (type) {
+        case 'separator':
+        case 'punctuation':
             candidates.push(...getPunctuationCharacters());
-        }
-        
-        if (lowerKeyword.includes('currency') || lowerKeyword.includes('통화') ||
-            lowerKeyword.includes('money') || lowerKeyword.includes('돈')) {
+            break;
+        case 'currency':
             candidates.push(...getCurrencyCharacters());
-        }
+            break;
+        case 'math_operator':
+            candidates.push(...getMathematicalCharacters());
+            break;
+        case 'emphasis':
+            candidates.push(...getEmphasisCharacters());
+            break;
+        default:
+            // Fallback: search by keywords
+            for (const keyword of keywords) {
+                candidates.push(...searchByNamePattern(keyword));
+            }
     }
     
     return candidates;
 }
 
-// 이름별 검색
-function searchByName(keywords) {
+// Search by name patterns
+function searchByName(nameObj) {
+    const { keywords } = nameObj;
     const candidates = [];
     
     for (const keyword of keywords) {
-        const lowerKeyword = keyword.toLowerCase();
-        
-        // 미리 정의된 문자들에서 이름 매칭
-        candidates.push(...searchByNamePattern(lowerKeyword));
+        candidates.push(...searchByNamePattern(keyword));
     }
     
     return candidates;
 }
 
-// 중복 제거 함수
+// Remove duplicate characters
 function removeDuplicates(candidates) {
     const seen = new Set();
     return candidates.filter(candidate => {
-        if (seen.has(candidate.codepoint)) {
+        if (seen.has(candidate.code)) {
             return false;
         }
-        seen.add(candidate.codepoint);
+        seen.add(candidate.code);
         return true;
     });
 }
 
-// 이모지 문자들 반환
+// Get emoji characters
 function getEmojiCharacters() {
     return [
-        { character: '😀', name: 'Grinning Face', codepoint: '1F600', description: '활짝 웃는 얼굴' },
-        { character: '😃', name: 'Grinning Face with Big Eyes', codepoint: '1F603', description: '큰 눈으로 웃는 얼굴' },
-        { character: '😄', name: 'Grinning Face with Smiling Eyes', codepoint: '1F604', description: '눈웃음치는 얼굴' },
-        { character: '😁', name: 'Beaming Face with Smiling Eyes', codepoint: '1F601', description: '환하게 웃는 얼굴' },
-        { character: '😆', name: 'Grinning Squinting Face', codepoint: '1F606', description: '눈을 찡긋하며 웃는 얼굴' },
-        { character: '😅', name: 'Grinning Face with Sweat', codepoint: '1F605', description: '식은땀 흘리며 웃는 얼굴' },
-        { character: '🤣', name: 'Rolling on the Floor Laughing', codepoint: '1F923', description: '바닥에 굴러다니며 웃는 얼굴' },
-        { character: '😂', name: 'Face with Tears of Joy', codepoint: '1F602', description: '기쁨의 눈물을 흘리는 얼굴' },
-        { character: '🙂', name: 'Slightly Smiling Face', codepoint: '1F642', description: '살짝 웃는 얼굴' },
-        { character: '😉', name: 'Winking Face', codepoint: '1F609', description: '윙크하는 얼굴' },
-        { character: '😊', name: 'Smiling Face with Smiling Eyes', codepoint: '1F60A', description: '눈웃음 치는 얼굴' },
-        { character: '😇', name: 'Smiling Face with Halo', codepoint: '1F607', description: '천사 얼굴' },
-        { character: '❤️', name: 'Red Heart', codepoint: '2764', description: '빨간 하트' },
-        { character: '💙', name: 'Blue Heart', codepoint: '1F499', description: '파란 하트' },
-        { character: '💚', name: 'Green Heart', codepoint: '1F49A', description: '초록 하트' },
-        { character: '💛', name: 'Yellow Heart', codepoint: '1F49B', description: '노란 하트' },
-        { character: '🧡', name: 'Orange Heart', codepoint: '1F9E1', description: '주황 하트' },
-        { character: '💜', name: 'Purple Heart', codepoint: '1F49C', description: '보라 하트' },
-        { character: '🖤', name: 'Black Heart', codepoint: '1F5A4', description: '검은 하트' },
-        { character: '🤍', name: 'White Heart', codepoint: '1F90D', description: '흰 하트' }
+        { char: '😀', code: 'U+1F600', name: 'GRINNING FACE' },
+        { char: '😃', code: 'U+1F603', name: 'GRINNING FACE WITH BIG EYES' },
+        { char: '😄', code: 'U+1F604', name: 'GRINNING FACE WITH SMILING EYES' },
+        { char: '😁', code: 'U+1F601', name: 'BEAMING FACE WITH SMILING EYES' },
+        { char: '😆', code: 'U+1F606', name: 'GRINNING SQUINTING FACE' },
+        { char: '😅', code: 'U+1F605', name: 'GRINNING FACE WITH SWEAT' },
+        { char: '🤣', code: 'U+1F923', name: 'ROLLING ON THE FLOOR LAUGHING' },
+        { char: '😂', code: 'U+1F602', name: 'FACE WITH TEARS OF JOY' },
+        { char: '🙂', code: 'U+1F642', name: 'SLIGHTLY SMILING FACE' },
+        { char: '🙃', code: 'U+1F643', name: 'UPSIDE-DOWN FACE' },
+        { char: '😉', code: 'U+1F609', name: 'WINKING FACE' },
+        { char: '😊', code: 'U+1F60A', name: 'SMILING FACE WITH SMILING EYES' },
+        { char: '😇', code: 'U+1F607', name: 'SMILING FACE WITH HALO' },
+        { char: '❤️', code: 'U+2764', name: 'RED HEART' },
+        { char: '💛', code: 'U+1F49B', name: 'YELLOW HEART' },
+        { char: '💚', code: 'U+1F49A', name: 'GREEN HEART' },
+        { char: '💙', code: 'U+1F499', name: 'BLUE HEART' },
+        { char: '💜', code: 'U+1F49C', name: 'PURPLE HEART' },
+        { char: '🤍', code: 'U+1F90D', name: 'WHITE HEART' },
+        { char: '🖤', code: 'U+1F5A4', name: 'BLACK HEART' },
+        { char: '🤎', code: 'U+1F90E', name: 'BROWN HEART' },
+        { char: '💕', code: 'U+1F495', name: 'TWO HEARTS' },
+        { char: '💖', code: 'U+1F496', name: 'SPARKLING HEART' },
+        { char: '✅', code: 'U+2705', name: 'CHECK MARK BUTTON' },
+        { char: '❌', code: 'U+274C', name: 'CROSS MARK' }
     ];
 }
 
-// 수학 기호들 반환
+// Get mathematical characters
 function getMathematicalCharacters() {
     return [
-        { character: '+', name: 'Plus Sign', codepoint: '002B', description: '더하기 기호' },
-        { character: '−', name: 'Minus Sign', codepoint: '2212', description: '빼기 기호' },
-        { character: '×', name: 'Multiplication Sign', codepoint: '00D7', description: '곱하기 기호' },
-        { character: '÷', name: 'Division Sign', codepoint: '00F7', description: '나누기 기호' },
-        { character: '=', name: 'Equals Sign', codepoint: '003D', description: '등호' },
-        { character: '≠', name: 'Not Equal To', codepoint: '2260', description: '부등호' },
-        { character: '≤', name: 'Less-Than or Equal To', codepoint: '2264', description: '작거나 같음' },
-        { character: '≥', name: 'Greater-Than or Equal To', codepoint: '2265', description: '크거나 같음' },
-        { character: '∑', name: 'N-Ary Summation', codepoint: '2211', description: '합 기호' },
-        { character: '∏', name: 'N-Ary Product', codepoint: '220F', description: '곱 기호' },
-        { character: '∫', name: 'Integral', codepoint: '222B', description: '적분 기호' },
-        { character: '∂', name: 'Partial Differential', codepoint: '2202', description: '편미분 기호' },
-        { character: '∞', name: 'Infinity', codepoint: '221E', description: '무한대 기호' },
-        { character: 'π', name: 'Greek Small Letter Pi', codepoint: '03C0', description: '파이' },
-        { character: '°', name: 'Degree Sign', codepoint: '00B0', description: '도 기호' }
+        { char: '+', code: 'U+002B', name: 'PLUS SIGN' },
+        { char: '−', code: 'U+2212', name: 'MINUS SIGN' },
+        { char: '×', code: 'U+00D7', name: 'MULTIPLICATION SIGN' },
+        { char: '÷', code: 'U+00F7', name: 'DIVISION SIGN' },
+        { char: '=', code: 'U+003D', name: 'EQUALS SIGN' },
+        { char: '≠', code: 'U+2260', name: 'NOT EQUAL TO' },
+        { char: '≈', code: 'U+2248', name: 'ALMOST EQUAL TO' },
+        { char: '≤', code: 'U+2264', name: 'LESS-THAN OR EQUAL TO' },
+        { char: '≥', code: 'U+2265', name: 'GREATER-THAN OR EQUAL TO' },
+        { char: '∞', code: 'U+221E', name: 'INFINITY' },
+        { char: '∫', code: 'U+222B', name: 'INTEGRAL' },
+        { char: '∑', code: 'U+2211', name: 'N-ARY SUMMATION' },
+        { char: '∏', code: 'U+220F', name: 'N-ARY PRODUCT' },
+        { char: '√', code: 'U+221A', name: 'SQUARE ROOT' },
+        { char: 'π', code: 'U+03C0', name: 'GREEK SMALL LETTER PI' },
+        { char: '∆', code: 'U+2206', name: 'INCREMENT' },
+        { char: '∇', code: 'U+2207', name: 'NABLA' },
+        { char: '∈', code: 'U+2208', name: 'ELEMENT OF' },
+        { char: '∉', code: 'U+2209', name: 'NOT AN ELEMENT OF' },
+        { char: '∪', code: 'U+222A', name: 'UNION' },
+        { char: '∩', code: 'U+2229', name: 'INTERSECTION' }
     ];
 }
 
-// 화살표 문자들 반환
+// Get arrow characters
 function getArrowCharacters() {
     return [
-        { character: '→', name: 'Rightwards Arrow', codepoint: '2192', description: '오른쪽 화살표' },
-        { character: '←', name: 'Leftwards Arrow', codepoint: '2190', description: '왼쪽 화살표' },
-        { character: '↑', name: 'Upwards Arrow', codepoint: '2191', description: '위쪽 화살표' },
-        { character: '↓', name: 'Downwards Arrow', codepoint: '2193', description: '아래쪽 화살표' },
-        { character: '↗', name: 'North East Arrow', codepoint: '2197', description: '북동쪽 화살표' },
-        { character: '↖', name: 'North West Arrow', codepoint: '2196', description: '북서쪽 화살표' },
-        { character: '↘', name: 'South East Arrow', codepoint: '2198', description: '남동쪽 화살표' },
-        { character: '↙', name: 'South West Arrow', codepoint: '2199', description: '남서쪽 화살표' },
-        { character: '⇒', name: 'Rightwards Double Arrow', codepoint: '21D2', description: '오른쪽 이중 화살표' },
-        { character: '⇐', name: 'Leftwards Double Arrow', codepoint: '21D0', description: '왼쪽 이중 화살표' },
-        { character: '⇑', name: 'Upwards Double Arrow', codepoint: '21D1', description: '위쪽 이중 화살표' },
-        { character: '⇓', name: 'Downwards Double Arrow', codepoint: '21D3', description: '아래쪽 이중 화살표' }
+        { char: '↑', code: 'U+2191', name: 'UPWARDS ARROW' },
+        { char: '↓', code: 'U+2193', name: 'DOWNWARDS ARROW' },
+        { char: '←', code: 'U+2190', name: 'LEFTWARDS ARROW' },
+        { char: '→', code: 'U+2192', name: 'RIGHTWARDS ARROW' },
+        { char: '↔', code: 'U+2194', name: 'LEFT RIGHT ARROW' },
+        { char: '↕', code: 'U+2195', name: 'UP DOWN ARROW' },
+        { char: '↖', code: 'U+2196', name: 'NORTH WEST ARROW' },
+        { char: '↗', code: 'U+2197', name: 'NORTH EAST ARROW' },
+        { char: '↘', code: 'U+2198', name: 'SOUTH EAST ARROW' },
+        { char: '↙', code: 'U+2199', name: 'SOUTH WEST ARROW' },
+        { char: '⇑', code: 'U+21D1', name: 'UPWARDS DOUBLE ARROW' },
+        { char: '⇓', code: 'U+21D3', name: 'DOWNWARDS DOUBLE ARROW' },
+        { char: '⇐', code: 'U+21D0', name: 'LEFTWARDS DOUBLE ARROW' },
+        { char: '⇒', code: 'U+21D2', name: 'RIGHTWARDS DOUBLE ARROW' },
+        { char: '⇔', code: 'U+21D4', name: 'LEFT RIGHT DOUBLE ARROW' },
+        { char: '▲', code: 'U+25B2', name: 'BLACK UP-POINTING TRIANGLE' },
+        { char: '▼', code: 'U+25BC', name: 'BLACK DOWN-POINTING TRIANGLE' },
+        { char: '◀', code: 'U+25C0', name: 'BLACK LEFT-POINTING TRIANGLE' },
+        { char: '▶', code: 'U+25B6', name: 'BLACK RIGHT-POINTING TRIANGLE' }
     ];
 }
 
-// 기하학적 모양들 반환
+// Get geometric characters
 function getGeometricCharacters() {
     return [
-        { character: '●', name: 'Black Circle', codepoint: '25CF', description: '검은 원' },
-        { character: '○', name: 'White Circle', codepoint: '25CB', description: '흰 원' },
-        { character: '■', name: 'Black Large Square', codepoint: '25A0', description: '검은 사각형' },
-        { character: '□', name: 'White Large Square', codepoint: '25A1', description: '흰 사각형' },
-        { character: '▲', name: 'Black Up-Pointing Triangle', codepoint: '25B2', description: '검은 위쪽 삼각형' },
-        { character: '△', name: 'White Up-Pointing Triangle', codepoint: '25B3', description: '흰 위쪽 삼각형' },
-        { character: '▼', name: 'Black Down-Pointing Triangle', codepoint: '25BC', description: '검은 아래쪽 삼각형' },
-        { character: '▽', name: 'White Down-Pointing Triangle', codepoint: '25BD', description: '흰 아래쪽 삼각형' },
-        { character: '◆', name: 'Black Diamond', codepoint: '25C6', description: '검은 다이아몬드' },
-        { character: '◇', name: 'White Diamond', codepoint: '25C7', description: '흰 다이아몬드' }
+        { char: '●', code: 'U+25CF', name: 'BLACK CIRCLE' },
+        { char: '○', code: 'U+25CB', name: 'WHITE CIRCLE' },
+        { char: '◉', code: 'U+25C9', name: 'FISHEYE' },
+        { char: '◎', code: 'U+25CE', name: 'BULLSEYE' },
+        { char: '■', code: 'U+25A0', name: 'BLACK SQUARE' },
+        { char: '□', code: 'U+25A1', name: 'WHITE SQUARE' },
+        { char: '▪', code: 'U+25AA', name: 'BLACK SMALL SQUARE' },
+        { char: '▫', code: 'U+25AB', name: 'WHITE SMALL SQUARE' },
+        { char: '▲', code: 'U+25B2', name: 'BLACK UP-POINTING TRIANGLE' },
+        { char: '△', code: 'U+25B3', name: 'WHITE UP-POINTING TRIANGLE' },
+        { char: '▼', code: 'U+25BC', name: 'BLACK DOWN-POINTING TRIANGLE' },
+        { char: '▽', code: 'U+25BD', name: 'WHITE DOWN-POINTING TRIANGLE' },
+        { char: '◆', code: 'U+25C6', name: 'BLACK DIAMOND' },
+        { char: '◇', code: 'U+25C7', name: 'WHITE DIAMOND' },
+        { char: '★', code: 'U+2605', name: 'BLACK STAR' },
+        { char: '☆', code: 'U+2606', name: 'WHITE STAR' }
     ];
 }
 
-// 원형 모양들 반환
+// Get circle shapes
 function getCircleShapes() {
     return [
-        { character: '●', name: 'Black Circle', codepoint: '25CF', description: '검은 원' },
-        { character: '○', name: 'White Circle', codepoint: '25CB', description: '흰 원' },
-        { character: '◉', name: 'Fisheye', codepoint: '25C9', description: '피시아이' },
-        { character: '◎', name: 'Bullseye', codepoint: '25CE', description: '불스아이' }
+        { char: '●', code: 'U+25CF', name: 'BLACK CIRCLE' },
+        { char: '○', code: 'U+25CB', name: 'WHITE CIRCLE' },
+        { char: '◉', code: 'U+25C9', name: 'FISHEYE' },
+        { char: '◎', code: 'U+25CE', name: 'BULLSEYE' },
+        { char: '⚫', code: 'U+26AB', name: 'MEDIUM BLACK CIRCLE' },
+        { char: '⚪', code: 'U+26AA', name: 'MEDIUM WHITE CIRCLE' },
+        { char: '🔴', code: 'U+1F534', name: 'RED CIRCLE' },
+        { char: '🟠', code: 'U+1F7E0', name: 'ORANGE CIRCLE' },
+        { char: '🟡', code: 'U+1F7E1', name: 'YELLOW CIRCLE' },
+        { char: '🟢', code: 'U+1F7E2', name: 'GREEN CIRCLE' },
+        { char: '🔵', code: 'U+1F535', name: 'BLUE CIRCLE' },
+        { char: '🟣', code: 'U+1F7E3', name: 'PURPLE CIRCLE' }
     ];
 }
 
-// 사각형 모양들 반환
+// Get square shapes
 function getSquareShapes() {
     return [
-        { character: '■', name: 'Black Large Square', codepoint: '25A0', description: '검은 사각형' },
-        { character: '□', name: 'White Large Square', codepoint: '25A1', description: '흰 사각형' },
-        { character: '▪', name: 'Black Small Square', codepoint: '25AA', description: '검은 작은 사각형' },
-        { character: '▫', name: 'White Small Square', codepoint: '25AB', description: '흰 작은 사각형' }
+        { char: '■', code: 'U+25A0', name: 'BLACK SQUARE' },
+        { char: '□', code: 'U+25A1', name: 'WHITE SQUARE' },
+        { char: '▪', code: 'U+25AA', name: 'BLACK SMALL SQUARE' },
+        { char: '▫', code: 'U+25AB', name: 'WHITE SMALL SQUARE' },
+        { char: '◼', code: 'U+25FC', name: 'BLACK MEDIUM SQUARE' },
+        { char: '◻', code: 'U+25FB', name: 'WHITE MEDIUM SQUARE' },
+        { char: '⬛', code: 'U+2B1B', name: 'BLACK LARGE SQUARE' },
+        { char: '⬜', code: 'U+2B1C', name: 'WHITE LARGE SQUARE' },
+        { char: '🟥', code: 'U+1F7E5', name: 'RED SQUARE' },
+        { char: '🟧', code: 'U+1F7E7', name: 'ORANGE SQUARE' },
+        { char: '🟨', code: 'U+1F7E8', name: 'YELLOW SQUARE' },
+        { char: '🟩', code: 'U+1F7E9', name: 'GREEN SQUARE' },
+        { char: '🟦', code: 'U+1F7EA', name: 'BLUE SQUARE' },
+        { char: '🟪', code: 'U+1F7EB', name: 'PURPLE SQUARE' }
     ];
 }
 
-// 삼각형 모양들 반환
+// Get triangle shapes
 function getTriangleShapes() {
     return [
-        { character: '▲', name: 'Black Up-Pointing Triangle', codepoint: '25B2', description: '검은 위쪽 삼각형' },
-        { character: '△', name: 'White Up-Pointing Triangle', codepoint: '25B3', description: '흰 위쪽 삼각형' },
-        { character: '▼', name: 'Black Down-Pointing Triangle', codepoint: '25BC', description: '검은 아래쪽 삼각형' },
-        { character: '▽', name: 'White Down-Pointing Triangle', codepoint: '25BD', description: '흰 아래쪽 삼각형' }
+        { char: '▲', code: 'U+25B2', name: 'BLACK UP-POINTING TRIANGLE' },
+        { char: '△', code: 'U+25B3', name: 'WHITE UP-POINTING TRIANGLE' },
+        { char: '▼', code: 'U+25BC', name: 'BLACK DOWN-POINTING TRIANGLE' },
+        { char: '▽', code: 'U+25BD', name: 'WHITE DOWN-POINTING TRIANGLE' },
+        { char: '◀', code: 'U+25C0', name: 'BLACK LEFT-POINTING TRIANGLE' },
+        { char: '◁', code: 'U+25C1', name: 'WHITE LEFT-POINTING TRIANGLE' },
+        { char: '▶', code: 'U+25B6', name: 'BLACK RIGHT-POINTING TRIANGLE' },
+        { char: '▷', code: 'U+25B7', name: 'WHITE RIGHT-POINTING TRIANGLE' },
+        { char: '🔺', code: 'U+1F53A', name: 'RED TRIANGLE POINTED UP' },
+        { char: '🔻', code: 'U+1F53B', name: 'RED TRIANGLE POINTED DOWN' }
     ];
 }
 
-// 별 모양들 반환
+// Get star shapes
 function getStarShapes() {
     return [
-        { character: '★', name: 'Black Star', codepoint: '2605', description: '검은 별' },
-        { character: '☆', name: 'White Star', codepoint: '2606', description: '흰 별' },
-        { character: '✦', name: 'Black Four Pointed Star', codepoint: '2726', description: '검은 네모 별' },
-        { character: '✧', name: 'White Four Pointed Star', codepoint: '2727', description: '흰 네모 별' }
+        { char: '★', code: 'U+2605', name: 'BLACK STAR' },
+        { char: '☆', code: 'U+2606', name: 'WHITE STAR' },
+        { char: '✦', code: 'U+2726', name: 'BLACK FOUR POINTED STAR' },
+        { char: '✧', code: 'U+2727', name: 'WHITE FOUR POINTED STAR' },
+        { char: '✩', code: 'U+2729', name: 'STRESS OUTLINED WHITE STAR' },
+        { char: '✪', code: 'U+272A', name: 'CIRCLED WHITE STAR' },
+        { char: '✫', code: 'U+272B', name: 'OPEN CENTRE BLACK STAR' },
+        { char: '✬', code: 'U+272C', name: 'BLACK CENTRE WHITE STAR' },
+        { char: '✭', code: 'U+272D', name: 'OUTLINED BLACK STAR' },
+        { char: '✮', code: 'U+272E', name: 'HEAVY OUTLINED BLACK STAR' },
+        { char: '✯', code: 'U+272F', name: 'PINWHEEL STAR' },
+        { char: '⭐', code: 'U+2B50', name: 'WHITE MEDIUM STAR' }
     ];
 }
 
-// 구두점 문자들 반환
+// Get heart shapes
+function getHeartShapes() {
+    return [
+        { char: '❤️', code: 'U+2764', name: 'RED HEART' },
+        { char: '🧡', code: 'U+1F9E1', name: 'ORANGE HEART' },
+        { char: '💛', code: 'U+1F49B', name: 'YELLOW HEART' },
+        { char: '💚', code: 'U+1F49A', name: 'GREEN HEART' },
+        { char: '💙', code: 'U+1F499', name: 'BLUE HEART' },
+        { char: '💜', code: 'U+1F49C', name: 'PURPLE HEART' },
+        { char: '🤍', code: 'U+1F90D', name: 'WHITE HEART' },
+        { char: '🖤', code: 'U+1F5A4', name: 'BLACK HEART' },
+        { char: '🤎', code: 'U+1F90E', name: 'BROWN HEART' },
+        { char: '💕', code: 'U+1F495', name: 'TWO HEARTS' },
+        { char: '💖', code: 'U+1F496', name: 'SPARKLING HEART' },
+        { char: '💗', code: 'U+1F497', name: 'GROWING HEART' },
+        { char: '💓', code: 'U+1F493', name: 'BEATING HEART' },
+        { char: '💞', code: 'U+1F49E', name: 'REVOLVING HEARTS' },
+        { char: '💝', code: 'U+1F49D', name: 'HEART WITH RIBBON' },
+        { char: '♥️', code: 'U+2665', name: 'HEART SUIT' }
+    ];
+}
+
+// Get diamond shapes
+function getDiamondShapes() {
+    return [
+        { char: '◆', code: 'U+25C6', name: 'BLACK DIAMOND' },
+        { char: '◇', code: 'U+25C7', name: 'WHITE DIAMOND' },
+        { char: '◈', code: 'U+25C8', name: 'WHITE DIAMOND CONTAINING BLACK SMALL DIAMOND' },
+        { char: '♦️', code: 'U+2666', name: 'DIAMOND SUIT' },
+        { char: '♢', code: 'U+2662', name: 'WHITE DIAMOND SUIT' },
+        { char: '💎', code: 'U+1F48E', name: 'GEM STONE' }
+    ];
+}
+
+// Get punctuation characters
 function getPunctuationCharacters() {
     return [
-        { character: '!', name: 'Exclamation Mark', codepoint: '0021', description: '느낌표' },
-        { character: '?', name: 'Question Mark', codepoint: '003F', description: '물음표' },
-        { character: '.', name: 'Full Stop', codepoint: '002E', description: '마침표' },
-        { character: ',', name: 'Comma', codepoint: '002C', description: '쉼표' },
-        { character: ';', name: 'Semicolon', codepoint: '003B', description: '세미콜론' },
-        { character: ':', name: 'Colon', codepoint: '003A', description: '콜론' }
+        { char: '.', code: 'U+002E', name: 'FULL STOP' },
+        { char: ',', code: 'U+002C', name: 'COMMA' },
+        { char: ';', code: 'U+003B', name: 'SEMICOLON' },
+        { char: ':', code: 'U+003A', name: 'COLON' },
+        { char: '!', code: 'U+0021', name: 'EXCLAMATION MARK' },
+        { char: '?', code: 'U+003F', name: 'QUESTION MARK' },
+        { char: '"', code: 'U+0022', name: 'QUOTATION MARK' },
+        { char: "'", code: 'U+0027', name: 'APOSTROPHE' },
+        { char: '(', code: 'U+0028', name: 'LEFT PARENTHESIS' },
+        { char: ')', code: 'U+0029', name: 'RIGHT PARENTHESIS' },
+        { char: '[', code: 'U+005B', name: 'LEFT SQUARE BRACKET' },
+        { char: ']', code: 'U+005D', name: 'RIGHT SQUARE BRACKET' },
+        { char: '{', code: 'U+007B', name: 'LEFT CURLY BRACKET' },
+        { char: '}', code: 'U+007D', name: 'RIGHT CURLY BRACKET' },
+        { char: '–', code: 'U+2013', name: 'EN DASH' },
+        { char: '—', code: 'U+2014', name: 'EM DASH' },
+        { char: '…', code: 'U+2026', name: 'HORIZONTAL ELLIPSIS' }
     ];
 }
 
-// 통화 기호들 반환
+// Get currency characters
 function getCurrencyCharacters() {
     return [
-        { character: '$', name: 'Dollar Sign', codepoint: '0024', description: '달러 기호' },
-        { character: '€', name: 'Euro Sign', codepoint: '20AC', description: '유로 기호' },
-        { character: '£', name: 'Pound Sign', codepoint: '00A3', description: '파운드 기호' },
-        { character: '¥', name: 'Yen Sign', codepoint: '00A5', description: '엔 기호' },
-        { character: '₩', name: 'Won Sign', codepoint: '20A9', description: '원 기호' }
+        { char: '$', code: 'U+0024', name: 'DOLLAR SIGN' },
+        { char: '€', code: 'U+20AC', name: 'EURO SIGN' },
+        { char: '£', code: 'U+00A3', name: 'POUND SIGN' },
+        { char: '¥', code: 'U+00A5', name: 'YEN SIGN' },
+        { char: '₹', code: 'U+20B9', name: 'INDIAN RUPEE SIGN' },
+        { char: '₩', code: 'U+20A9', name: 'WON SIGN' },
+        { char: '¢', code: 'U+00A2', name: 'CENT SIGN' },
+        { char: '₽', code: 'U+20BD', name: 'RUBLE SIGN' },
+        { char: '₿', code: 'U+20BF', name: 'BITCOIN SIGN' },
+        { char: '¤', code: 'U+00A4', name: 'GENERIC CURRENCY SYMBOL' }
     ];
 }
 
-// 이름 패턴으로 검색
+// Get emphasis characters
+function getEmphasisCharacters() {
+    return [
+        { char: '*', code: 'U+002A', name: 'ASTERISK' },
+        { char: '**', code: 'U+002A U+002A', name: 'DOUBLE ASTERISK' },
+        { char: '_', code: 'U+005F', name: 'LOW LINE' },
+        { char: '‾', code: 'U+203E', name: 'OVERLINE' },
+        { char: '‗', code: 'U+2017', name: 'DOUBLE LOW LINE' },
+        { char: '′', code: 'U+2032', name: 'PRIME' },
+        { char: '″', code: 'U+2033', name: 'DOUBLE PRIME' },
+        { char: '‴', code: 'U+2034', name: 'TRIPLE PRIME' }
+    ];
+}
+
+// Search by name pattern
 function searchByNamePattern(keyword) {
+    const candidates = [];
+    const lowerKeyword = keyword.toLowerCase();
+    
+    // Get all character sets
     const allCharacters = [
         ...getEmojiCharacters(),
         ...getMathematicalCharacters(),
         ...getArrowCharacters(),
-        ...getGeometricCharacters()
+        ...getGeometricCharacters(),
+        ...getCircleShapes(),
+        ...getSquareShapes(),
+        ...getTriangleShapes(),
+        ...getStarShapes(),
+        ...getHeartShapes(),
+        ...getDiamondShapes(),
+        ...getPunctuationCharacters(),
+        ...getCurrencyCharacters(),
+        ...getEmphasisCharacters()
     ];
     
-    return allCharacters.filter(char => 
-        char.name.toLowerCase().includes(keyword) ||
-        char.description.toLowerCase().includes(keyword)
-    );
+    // Search for characters whose names contain the keyword
+    for (const character of allCharacters) {
+        if (character.name.toLowerCase().includes(lowerKeyword)) {
+            candidates.push(character);
+        }
+    }
+    
+    return candidates;
 } 

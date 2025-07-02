@@ -1,50 +1,36 @@
 // 사용자 쿼리를 4가지 기준으로 분석하는 API
-export default {
-  async fetch(request, env, ctx) {
-    // CORS headers
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    };
-
-    // Handle preflight requests
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { 
-        status: 405, 
-        headers: corsHeaders 
+export async function onRequestPost(context) {
+  try {
+    const { request, env } = context;
+    const { query } = await request.json();
+    
+    if (!query || typeof query !== 'string') {
+      return new Response(JSON.stringify({ 
+        error: 'Query is required and must be a string' 
+      }), { 
+        status: 400, 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        } 
       });
     }
 
-    try {
-      const { query } = await request.json();
-      
-      if (!query || typeof query !== 'string') {
-        return new Response(JSON.stringify({ 
-          error: 'Query is required and must be a string' 
-        }), { 
-          status: 400, 
-          headers: { 'Content-Type': 'application/json', ...corsHeaders } 
-        });
-      }
-
-      // Use official Qwen DashScope API
-      const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: "qwen-plus",
-          messages: [
-            {
-              role: "system",
-              content: `You are a Unicode search query analyzer. Your task is to analyze user queries and break them down into 4 specific search criteria.
+    // Use official Qwen DashScope API
+    const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "qwen-plus",
+        messages: [
+          {
+            role: "system",
+            content: `You are a Unicode search query analyzer. Your task is to analyze user queries and break them down into 4 specific search criteria.
 
 For the given query, provide EXACTLY this JSON structure:
 {
@@ -84,54 +70,79 @@ Guidelines:
 - Focus on the most relevant 2-3 criteria for any given query
 
 Respond with ONLY the JSON, no additional text.`
-            },
-            {
-              role: "user",
-              content: query
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 800
-        })
-      });
+          },
+          {
+            role: "user",
+            content: query
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 800
+      })
+    });
 
-      if (!response.ok) {
-        console.error('Qwen API error:', response.status, await response.text());
-        // Fallback analysis
-        return new Response(JSON.stringify(getFallbackAnalysis(query)), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders }
-        });
-      }
-
-      const data = await response.json();
-      let analysisResult;
-
-      try {
-        const content = data.choices[0].message.content.trim();
-        analysisResult = JSON.parse(content);
-      } catch (parseError) {
-        console.error('Failed to parse Qwen response:', parseError);
-        analysisResult = getFallbackAnalysis(query);
-      }
-
-      return new Response(JSON.stringify(analysisResult), {
+    if (!response.ok) {
+      console.error('Qwen API error:', response.status, await response.text());
+      // Fallback analysis
+      return new Response(JSON.stringify(getFallbackAnalysis(query)), {
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
-
-    } catch (error) {
-      console.error('Analysis error:', error);
-      
-      // Return fallback analysis
-      const fallback = getFallbackAnalysis(query || '');
-      return new Response(JSON.stringify(fallback), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
       });
     }
+
+    const data = await response.json();
+    let analysisResult;
+
+    try {
+      const content = data.choices[0].message.content.trim();
+      analysisResult = JSON.parse(content);
+    } catch (parseError) {
+      console.error('Failed to parse Qwen response:', parseError);
+      analysisResult = getFallbackAnalysis(query);
+    }
+
+    return new Response(JSON.stringify(analysisResult), {
+      status: 200,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      }
+    });
+
+  } catch (error) {
+    console.error('Analysis error:', error);
+    
+    // Return fallback analysis
+    const fallback = getFallbackAnalysis(query || '');
+    return new Response(JSON.stringify(fallback), {
+      status: 200,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      }
+    });
   }
-};
+}
+
+// CORS 처리를 위한 OPTIONS 핸들러
+export async function onRequestOptions() {
+  return new Response(null, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    }
+  });
+}
 
 function getFallbackAnalysis(query) {
   const lowerQuery = query.toLowerCase();
