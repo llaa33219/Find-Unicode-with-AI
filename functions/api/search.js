@@ -86,6 +86,8 @@ CRITICAL INSTRUCTIONS:
 - Find characters based on visual similarity, functional purpose, semantic meaning, and contextual relevance
 - Include characters from multiple Unicode blocks that serve similar purposes
 - Be comprehensive - find 25-40 characters that could be useful
+- RETURN ONLY SINGLE UNICODE CHARACTERS, NOT WORDS OR COMBINATIONS
+- Each result must be exactly ONE character, not multiple characters together
 
 Analysis criteria will include:
 - Primary criterion (most important search direction)
@@ -96,21 +98,34 @@ Return EXACTLY this JSON structure:
 {
   "results": [
     {
-      "char": "character",
+      "char": "single_character_only",
       "code": "U+XXXX",
       "name": "UNICODE CHARACTER NAME",
-      "reason": "detailed explanation of why this character matches"
+      "reason": "detailed explanation of why this single character matches"
     }
   ]
 }
 
 Guidelines:
-- Find 25-40 relevant characters from ALL applicable Unicode blocks
+- Find 25-40 relevant SINGLE characters from ALL applicable Unicode blocks
 - Don't limit yourself to predefined categories
 - Look for visual, functional, and semantic matches
 - Include both obvious and creative matches
 - Consider all criteria, not just the primary one
 - Use proper Unicode format (U+XXXX)
+- NEVER return multiple characters together (like 顔文字 or 輪郭)
+- Each "char" field must contain exactly ONE Unicode character
+- Do not return compound words, phrases, or character combinations
+
+EXAMPLES OF CORRECT FORMAT:
+✅ "char": "顔" (single character)
+✅ "char": "文" (single character) 
+✅ "char": "字" (single character)
+
+EXAMPLES OF INCORRECT FORMAT:
+❌ "char": "顔文字" (multiple characters)
+❌ "char": "輪郭" (multiple characters)
+❌ "char": "face shape" (words)
 
 Respond with ONLY the JSON, no additional text.`
                     },
