@@ -2,11 +2,16 @@
 export async function onRequestPost(context) {
   try {
     const { request, env } = context;
-    const { candidates, criteria, query } = await request.json();
+    const body = await request.json();
+    
+    console.log('Filter API received:', body);
+    
+    const { candidates, criteria, query } = body;
     
     if (!Array.isArray(candidates) || candidates.length === 0) {
+      console.error('Invalid candidates:', candidates);
       return new Response(JSON.stringify({ 
-        error: 'Candidates array is required' 
+        error: 'Candidates array is required and must not be empty' 
       }), { 
         status: 400, 
         headers: { 
@@ -19,6 +24,7 @@ export async function onRequestPost(context) {
     }
 
     if (!query || typeof query !== 'string') {
+      console.error('Invalid query:', query);
       return new Response(JSON.stringify({ 
         error: 'Query is required and must be a string' 
       }), { 
@@ -34,7 +40,9 @@ export async function onRequestPost(context) {
 
     // Check if this is a shape-related query for enhanced analysis
     const isShapeQuery = criteria?.shape?.type && criteria.shape.type !== null;
-    const model = isShapeQuery ? "qwen-vl-plus" : "qwen-plus";
+    const model = isShapeQuery ? "qwen-vl-plus-latest" : "qwen-turbo-latest";
+    
+    console.log('Using model:', model, 'for shape query:', isShapeQuery);
 
     let messages = [
       {
@@ -95,7 +103,8 @@ Please select the top 10 most relevant characters and provide detailed analysis 
     });
 
     if (!response.ok) {
-      console.error('Qwen API error:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Qwen API error:', response.status, errorText);
       // Fallback to basic filtering
       return new Response(JSON.stringify({
         results: getBasicFilteredResults(candidates, query)

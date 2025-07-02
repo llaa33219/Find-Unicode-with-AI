@@ -18,7 +18,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    // Use official Qwen DashScope API
+    // Use official Qwen DashScope API with turbo model for basic analysis
     const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -26,7 +26,7 @@ export async function onRequestPost(context) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: "qwen-plus",
+        model: "qwen-turbo-latest",
         messages: [
           {
             role: "system",
@@ -82,7 +82,8 @@ Respond with ONLY the JSON, no additional text.`
     });
 
     if (!response.ok) {
-      console.error('Qwen API error:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Qwen API error:', response.status, errorText);
       // Fallback analysis
       return new Response(JSON.stringify(getFallbackAnalysis(query)), {
         status: 200,

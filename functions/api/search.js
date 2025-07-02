@@ -2,9 +2,14 @@
 export async function onRequestPost(context) {
     try {
         const { request } = context;
-        const { criteria } = await request.json();
+        const body = await request.json();
+        
+        console.log('Search API received:', body);
+        
+        const { criteria } = body;
 
         if (!criteria || typeof criteria !== 'object') {
+            console.error('Invalid criteria:', criteria);
             return new Response(JSON.stringify({
                 error: 'Valid search criteria is required'
             }), {
@@ -22,21 +27,25 @@ export async function onRequestPost(context) {
 
         // Search by each criterion
         if (criteria.range && criteria.range.type) {
+            console.log('Searching by range:', criteria.range);
             const candidates = searchByRange(criteria.range);
             allCandidates = allCandidates.concat(candidates);
         }
 
         if (criteria.shape && criteria.shape.type) {
+            console.log('Searching by shape:', criteria.shape);
             const candidates = searchByShape(criteria.shape);
             allCandidates = allCandidates.concat(candidates);
         }
 
         if (criteria.function && criteria.function.type) {
+            console.log('Searching by function:', criteria.function);
             const candidates = searchByFunction(criteria.function);
             allCandidates = allCandidates.concat(candidates);
         }
 
         if (criteria.name && criteria.name.keywords && criteria.name.keywords.length > 0) {
+            console.log('Searching by name:', criteria.name);
             const candidates = searchByName(criteria.name);
             allCandidates = allCandidates.concat(candidates);
         }
@@ -46,6 +55,12 @@ export async function onRequestPost(context) {
         
         // Limit to maximum 50 results
         const limitedCandidates = uniqueCandidates.slice(0, 50);
+        
+        console.log('Search results:', { 
+            total: uniqueCandidates.length, 
+            limited: limitedCandidates.length,
+            first3: limitedCandidates.slice(0, 3)
+        });
 
         return new Response(JSON.stringify({
             results: limitedCandidates,

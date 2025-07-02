@@ -111,6 +111,8 @@ async function searchUnicode(criteria) {
 // Step 3: Filter results with AI
 async function filterResults(candidates, criteria, query) {
     try {
+        console.log('Filter request data:', { candidates, criteria, query });
+        
         const response = await fetch('/api/filter', {
             method: 'POST',
             headers: {
@@ -120,6 +122,8 @@ async function filterResults(candidates, criteria, query) {
         });
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Filter API error response:', errorText);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
