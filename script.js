@@ -1,15 +1,15 @@
 // DOM elements
-const searchInput = document.getElementById('search-input');
-const searchBtn = document.getElementById('search-btn');
-const progressSection = document.getElementById('progress-section');
-const progressBar = document.getElementById('progress-bar');
-const progressText = document.getElementById('progress-text');
-const analysisSection = document.getElementById('analysis-section');
-const analysisResults = document.getElementById('analysis-results');
-const resultsSection = document.getElementById('results-section');
-const resultsContainer = document.getElementById('results-container');
-const errorSection = document.getElementById('error-section');
-const errorMessage = document.getElementById('error-message');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const progressSection = document.getElementById('progressSection');
+const progressBar = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+const analysisSection = document.getElementById('analysisSection');
+const analysisResults = document.getElementById('criteriaGrid');
+const resultsSection = document.getElementById('resultsSection');
+const resultsContainer = document.getElementById('resultsGrid');
+const errorSection = document.getElementById('errorSection');
+const errorMessage = document.getElementById('errorMessage');
 
 // Event listeners
 searchBtn.addEventListener('click', handleSearch);
@@ -173,13 +173,10 @@ function displayAnalysis(analysis) {
     }
 
     analysisResults.innerHTML = activeCriteria.map(criterion => `
-        <div class="analysis-item">
-            <div class="analysis-header">
-                <span class="analysis-type">${criterion.type}</span>
-                <h4>${criterion.title}</h4>
-            </div>
-            <p class="analysis-description">${criterion.description}</p>
-            <div class="analysis-keywords">
+        <div class="criteria-item">
+            <h4>${criterion.title}</h4>
+            <p>${criterion.description}</p>
+            <div class="keywords">
                 ${criterion.keywords.map(keyword => 
                     `<span class="keyword">${keyword}</span>`
                 ).join('')}
@@ -200,23 +197,21 @@ function displayResults(results) {
 
     resultsContainer.innerHTML = results.map(result => `
         <div class="result-item">
-            <div class="character" data-char="${result.char}">${result.char}</div>
-            <div class="character-info">
-                <div class="character-name">${result.name}</div>
-                <div class="character-code">${result.code}</div>
-                <div class="character-scores">
-                    <span class="score">Relevance: ${result.relevance_score}/10</span>
-                    <span class="score">Visual: ${result.visual_match_score}/10</span>
+            <div class="result-header">
+                <div class="result-char">${result.char}</div>
+                <div class="result-info">
+                    <h4>${result.name}</h4>
+                    <div class="unicode-code">${result.code}</div>
                 </div>
-                <div class="character-analysis">${result.analysis}</div>
             </div>
-            <button class="copy-btn" onclick="copyCharacter('${result.char}', this)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-                Copy
-            </button>
+            <div class="result-scores">
+                <span class="score">Relevance: ${result.relevance_score}/10</span>
+                <span class="score">Visual: ${result.visual_match_score}/10</span>
+            </div>
+            <div class="result-description">${result.analysis}</div>
+            <div class="result-actions">
+                <button class="copy-btn" onclick="copyCharacter('${result.char}', this)">문자 복사</button>
+            </div>
         </div>
     `).join('');
 
@@ -229,17 +224,12 @@ async function copyCharacter(char, button) {
         await navigator.clipboard.writeText(char);
         
         // Visual feedback
-        const originalText = button.innerHTML;
-        button.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20,6 9,17 4,12"></polyline>
-            </svg>
-            Copied!
-        `;
+        const originalText = button.textContent;
+        button.textContent = '복사됨!';
         button.classList.add('copied');
         
         setTimeout(() => {
-            button.innerHTML = originalText;
+            button.textContent = originalText;
             button.classList.remove('copied');
         }, 2000);
         
@@ -252,26 +242,14 @@ async function copyCharacter(char, button) {
         textArea.select();
         try {
             document.execCommand('copy');
-            button.textContent = 'Copied!';
+            button.textContent = '복사됨!';
             setTimeout(() => {
-                button.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    Copy
-                `;
+                button.textContent = '문자 복사';
             }, 2000);
         } catch (err) {
-            button.textContent = 'Copy failed';
+            button.textContent = '복사 실패';
             setTimeout(() => {
-                button.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    Copy
-                `;
+                button.textContent = '문자 복사';
             }, 2000);
         }
         document.body.removeChild(textArea);
