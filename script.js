@@ -328,7 +328,7 @@ const translations = {
         analyzing: '분석 중...',
         analysisResults: '분석 결과',
         foundCharacters: '찾은 유니코드 문자',
-        poweredBy: 'Made by <a href="https://github.com/llaa33219" target="_blank">BLOUplanet</a>',
+        poweredBy: '만든사람: <a href="https://github.com/llaa33219" target="_blank">BLOUplanet</a>',
         copy: '복사',
         copied: '복사됨!',
         copyFailed: '복사 실패',
