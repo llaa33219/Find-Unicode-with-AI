@@ -328,7 +328,7 @@ const translations = {
         analyzing: '분석 중...',
         analysisResults: '분석 결과',
         foundCharacters: '찾은 유니코드 문자',
-        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        poweredBy: 'Made by <a href="https://github.com/llaa33219" target="_blank">BLOUplanet</a>',
         copy: '복사',
         copied: '복사됨!',
         copyFailed: '복사 실패',
@@ -352,7 +352,7 @@ const translations = {
         analyzing: 'Analyzing...',
         analysisResults: 'Analysis Results',
         foundCharacters: 'Found Unicode Characters',
-        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        poweredBy: 'Made by <a href="https://github.com/llaa33219" target="_blank">BLOUplanet</a>',
         copy: 'Copy',
         copied: 'Copied!',
         copyFailed: 'Copy failed',
@@ -376,7 +376,7 @@ const translations = {
         analyzing: '分析中...',
         analysisResults: '分析結果',
         foundCharacters: '見つかったUnicode文字',
-        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        poweredBy: '制作者: <a href="https://github.com/llaa33219" target="_blank">BLOUplanet</a>',
         copy: 'コピー',
         copied: 'コピーしました！',
         copyFailed: 'コピー失敗',
@@ -400,7 +400,7 @@ const translations = {
         analyzing: '分析中...',
         analysisResults: '分析结果',
         foundCharacters: '找到的Unicode字符',
-        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        poweredBy: '制作者: <a href="https://github.com/llaa33219" target="_blank">BLOUplanet</a>',
         copy: '复制',
         copied: '已复制！',
         copyFailed: '复制失败',
@@ -465,7 +465,14 @@ function updateTexts() {
     // Update elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(element => {
         const key = element.getAttribute('data-i18n');
-        element.textContent = t(key);
+        const translation = t(key);
+        
+        // Use innerHTML for elements that contain HTML (like links)
+        if (translation.includes('<') && translation.includes('>')) {
+            element.innerHTML = translation;
+        } else {
+            element.textContent = translation;
+        }
     });
     
     // Update placeholder

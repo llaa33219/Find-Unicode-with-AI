@@ -506,6 +506,18 @@ body {
     font-size: 0.875rem;
 }
 
+.footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.footer a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
 .fade-in {
     animation: fadeIn 0.5s ease-out;
 }
