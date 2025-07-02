@@ -152,16 +152,16 @@ function displayAnalysis(analysis) {
     Object.entries(criteria).forEach(([key, criterion]) => {
         if (criterion.confidence > 0.3) {  // Only show criteria with decent confidence
             const displayNames = {
-                'range': '범위 검색',
-                'shape': '모양 검색', 
-                'function': '기능 검색',
-                'name': '이름 검색'
+                'range': t('rangeSearch'),
+                'shape': t('shapeSearch'), 
+                'function': t('functionSearch'),
+                'name': t('nameSearch')
             };
             
             activeCriteria.push({
                 type: key,
                 title: displayNames[key] || key,
-                description: criterion.type ? `유형: ${criterion.type}` : '키워드 기반 검색',
+                description: criterion.type ? `${t('type')}: ${criterion.type}` : t('keywordBased'),
                 keywords: criterion.keywords || [],
                 confidence: criterion.confidence,
                 isPrimary: key === primaryCriterion
@@ -177,11 +177,11 @@ function displayAnalysis(analysis) {
 
     analysisResults.innerHTML = activeCriteria.map(criterion => `
         <div class="criteria-item ${criterion.isPrimary ? 'primary' : ''}">
-            <h4>${criterion.title} ${criterion.isPrimary ? '(주요)' : ''}</h4>
+            <h4>${criterion.title} ${criterion.isPrimary ? `(${t('primary')})` : ''}</h4>
             <p>${criterion.description}</p>
             <div class="confidence-bar">
                 <div class="confidence-fill" style="width: ${criterion.confidence * 100}%"></div>
-                <span class="confidence-text">신뢰도: ${(criterion.confidence * 100).toFixed(0)}%</span>
+                <span class="confidence-text">${t('confidence')}: ${(criterion.confidence * 100).toFixed(0)}%</span>
             </div>
             ${criterion.keywords.length > 0 ? `
                 <div class="keywords">
@@ -233,7 +233,7 @@ function displayResults(results) {
                     <div class="visual-features"><strong>시각적 특징:</strong> ${result.visual_features}</div>
                 ` : ''}
                 <div class="result-actions">
-                    <button class="copy-btn" data-char="${result.char}" data-index="${index}">문자 복사</button>
+                    <button class="copy-btn" data-char="${result.char}" data-index="${index}">${t('copy')}</button>
                 </div>
             </div>
         `;
@@ -258,7 +258,7 @@ async function copyCharacter(char, button) {
         
         // Visual feedback
         const originalText = button.textContent;
-        button.textContent = '복사됨!';
+        button.textContent = t('copied');
         button.classList.add('copied');
         
         setTimeout(() => {
@@ -275,14 +275,14 @@ async function copyCharacter(char, button) {
         textArea.select();
         try {
             document.execCommand('copy');
-            button.textContent = '복사됨!';
+            button.textContent = t('copied');
             setTimeout(() => {
-                button.textContent = '문자 복사';
+                button.textContent = t('copy');
             }, 2000);
         } catch (err) {
-            button.textContent = '복사 실패';
+            button.textContent = t('copyFailed');
             setTimeout(() => {
-                button.textContent = '문자 복사';
+                button.textContent = t('copy');
             }, 2000);
         }
         document.body.removeChild(textArea);
@@ -316,6 +316,209 @@ function hideAllSections() {
     analysisSection.style.display = 'none';
     resultsSection.style.display = 'none';
     errorSection.style.display = 'none';
+}
+
+// Internationalization (i18n) system
+const translations = {
+    ko: {
+        title: 'Find Unicode with AI',
+        subtitle: 'AI를 활용해 원하는 유니코드 문자를 쉽게 찾아보세요',
+        searchPlaceholder: '찾고자 하는 문자를 설명해주세요. 예: \'웃는 얼굴 이모지\', \'수학 기호 중 적분\', \'화살표 모양\' 등',
+        searchButton: '검색',
+        analyzing: '분석 중...',
+        analysisResults: '분석 결과',
+        foundCharacters: '찾은 유니코드 문자',
+        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        copy: '복사',
+        copied: '복사됨!',
+        copyFailed: '복사 실패',
+        confidence: '신뢰도',
+        primary: '주요',
+        rangeSearch: '범위 검색',
+        shapeSearch: '모양 검색',
+        functionSearch: '기능 검색',
+        nameSearch: '이름 검색',
+        keywordBased: '키워드 기반 검색',
+        type: '유형',
+        noResults: '검색 결과가 없습니다',
+        searchFailed: '검색 실패',
+        enterQuery: '검색어를 입력해주세요'
+    },
+    en: {
+        title: 'Find Unicode with AI',
+        subtitle: 'Easily find the Unicode characters you want using AI',
+        searchPlaceholder: 'Describe the character you\'re looking for. e.g. \'smiling face emoji\', \'integral math symbol\', \'arrow shape\', etc.',
+        searchButton: 'Search',
+        analyzing: 'Analyzing...',
+        analysisResults: 'Analysis Results',
+        foundCharacters: 'Found Unicode Characters',
+        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        copy: 'Copy',
+        copied: 'Copied!',
+        copyFailed: 'Copy failed',
+        confidence: 'Confidence',
+        primary: 'Primary',
+        rangeSearch: 'Range Search',
+        shapeSearch: 'Shape Search',
+        functionSearch: 'Function Search',
+        nameSearch: 'Name Search',
+        keywordBased: 'Keyword-based search',
+        type: 'Type',
+        noResults: 'No search results found',
+        searchFailed: 'Search failed',
+        enterQuery: 'Please enter a search query'
+    },
+    ja: {
+        title: 'Find Unicode with AI',
+        subtitle: 'AIを活用して欲しいUnicode文字を簡単に見つけます',
+        searchPlaceholder: '探している文字を説明してください。例：「笑顔の絵文字」、「積分の数学記号」、「矢印の形」など',
+        searchButton: '検索',
+        analyzing: '分析中...',
+        analysisResults: '分析結果',
+        foundCharacters: '見つかったUnicode文字',
+        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        copy: 'コピー',
+        copied: 'コピーしました！',
+        copyFailed: 'コピー失敗',
+        confidence: '信頼度',
+        primary: '主要',
+        rangeSearch: '範囲検索',
+        shapeSearch: '形状検索',
+        functionSearch: '機能検索',
+        nameSearch: '名前検索',
+        keywordBased: 'キーワードベース検索',
+        type: 'タイプ',
+        noResults: '検索結果が見つかりません',
+        searchFailed: '検索に失敗しました',
+        enterQuery: '検索クエリを入力してください'
+    },
+    zh: {
+        title: 'Find Unicode with AI',
+        subtitle: '使用AI轻松找到您想要的Unicode字符',
+        searchPlaceholder: '请描述您要查找的字符。例如："笑脸表情符号"、"积分数学符号"、"箭头形状"等',
+        searchButton: '搜索',
+        analyzing: '分析中...',
+        analysisResults: '分析结果',
+        foundCharacters: '找到的Unicode字符',
+        poweredBy: 'Powered by Qwen AI | Cloudflare Pages',
+        copy: '复制',
+        copied: '已复制！',
+        copyFailed: '复制失败',
+        confidence: '置信度',
+        primary: '主要',
+        rangeSearch: '范围搜索',
+        shapeSearch: '形状搜索',
+        functionSearch: '功能搜索',
+        nameSearch: '名称搜索',
+        keywordBased: '基于关键词的搜索',
+        type: '类型',
+        noResults: '未找到搜索结果',
+        searchFailed: '搜索失败',
+        enterQuery: '请输入搜索查询'
+    }
+};
+
+let currentLanguage = 'ko';
+
+// Dark mode functionality
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = themeToggle.querySelector('.theme-icon');
+const languageSelect = document.getElementById('languageSelect');
+
+// Initialize theme
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    setTheme(savedTheme);
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem('theme', theme);
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+}
+
+// Internationalization functions
+function initializeLanguage() {
+    const savedLanguage = localStorage.getItem('language') || 'ko';
+    currentLanguage = savedLanguage;
+    languageSelect.value = savedLanguage;
+    updateTexts();
+}
+
+function setLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('language', lang);
+    updateTexts();
+}
+
+function t(key) {
+    return translations[currentLanguage][key] || translations['ko'][key] || key;
+}
+
+function updateTexts() {
+    // Update elements with data-i18n attribute
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        element.textContent = t(key);
+    });
+    
+    // Update placeholder
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.placeholder = t('searchPlaceholder');
+    }
+}
+
+// Event listeners for theme and language
+themeToggle.addEventListener('click', toggleTheme);
+languageSelect.addEventListener('change', (e) => {
+    setLanguage(e.target.value);
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    initializeTheme();
+    initializeLanguage();
+});
+
+// Copy notification
+function showCopyNotification() {
+    const notification = document.createElement('div');
+    notification.className = 'copy-notification';
+    notification.textContent = t('copied');
+    document.body.appendChild(notification);
+    
+    // Show notification
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 100);
+    
+    // Hide and remove notification
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 2000);
+}
+
+// Update existing functions to use translations
+const originalShowError = showError;
+function showError(message) {
+    // Try to translate common error messages
+    let translatedMessage = message;
+    if (message.includes('Please enter a search query')) {
+        translatedMessage = t('enterQuery');
+    } else if (message.includes('Search failed')) {
+        translatedMessage = t('searchFailed');
+    }
+    originalShowError(translatedMessage);
 }
 
 // Initialize

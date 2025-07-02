@@ -9,9 +9,23 @@
 </head>
 <body>
     <div class="container">
+        <div class="controls">
+            <div class="language-selector">
+                <select id="languageSelect">
+                    <option value="ko">한국어</option>
+                    <option value="en">English</option>
+                    <option value="ja">日本語</option>
+                    <option value="zh">中文</option>
+                </select>
+            </div>
+            <button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </div>
+        
         <header class="header">
-            <h1 class="title">Find Unicode with AI</h1>
-            <p class="subtitle">AI를 활용해 원하는 유니코드 문자를 쉽게 찾아보세요</p>
+            <h1 class="title" data-i18n="title">Find Unicode with AI</h1>
+            <p class="subtitle" data-i18n="subtitle">AI를 활용해 원하는 유니코드 문자를 쉽게 찾아보세요</p>
         </header>
 
         <main class="main">
@@ -19,11 +33,12 @@
                 <div class="input-container">
                     <textarea 
                         id="searchInput" 
+                        data-i18n-placeholder="searchPlaceholder"
                         placeholder="찾고자 하는 문자를 설명해주세요. 예: '웃는 얼굴 이모지', '수학 기호 중 적분', '화살표 모양' 등"
                         rows="3"
                     ></textarea>
                     <button id="searchBtn" class="search-btn">
-                        <span class="btn-text">검색</span>
+                        <span class="btn-text" data-i18n="searchButton">검색</span>
                         <div class="loading-spinner" style="display: none;"></div>
                     </button>
                 </div>
@@ -34,19 +49,19 @@
                     <div class="progress-bar">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
-                    <div class="progress-text" id="progressText">분석 중...</div>
+                    <div class="progress-text" id="progressText" data-i18n="analyzing">분석 중...</div>
                 </div>
             </div>
 
             <div id="analysisSection" class="analysis-section" style="display: none;">
-                <h3>분석 결과</h3>
+                <h3 data-i18n="analysisResults">분석 결과</h3>
                 <div class="criteria-grid" id="criteriaGrid">
                     <!-- AI 분석 결과가 여기에 표시됩니다 -->
                 </div>
             </div>
 
             <div id="resultsSection" class="results-section" style="display: none;">
-                <h3>찾은 유니코드 문자</h3>
+                <h3 data-i18n="foundCharacters">찾은 유니코드 문자</h3>
                 <div class="results-grid" id="resultsGrid">
                     <!-- 결과가 여기에 표시됩니다 -->
                 </div>
@@ -58,7 +73,7 @@
         </main>
 
         <footer class="footer">
-            <p>Powered by Qwen AI | Cloudflare Pages</p>
+            <p data-i18n="poweredBy">Powered by Qwen AI | Cloudflare Pages</p>
         </footer>
     </div>
 
