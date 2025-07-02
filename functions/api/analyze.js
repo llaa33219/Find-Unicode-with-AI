@@ -249,26 +249,26 @@ function normalizeAnalysis(result) {
         result.criteria = {};
     }
     
-    // Normalize each criterion
-    result.criteria.range = normalizeCriterion(result.criteria.range, ['emoji', 'math', 'arrows', 'geometric', 'punctuation', 'currency', 'symbols']);
-    result.criteria.shape = normalizeCriterion(result.criteria.shape, ['circle', 'square', 'triangle', 'star', 'heart', 'diamond', 'arrow', 'line', 'cross']);
-    result.criteria.function = normalizeCriterion(result.criteria.function, ['separator', 'punctuation', 'currency', 'math_operator', 'emphasis', 'decoration']);
+    // Normalize each criterion - allow AI's creative types
+    result.criteria.range = normalizeCriterionOpen(result.criteria.range);
+    result.criteria.shape = normalizeCriterionOpen(result.criteria.shape);
+    result.criteria.function = normalizeCriterionOpen(result.criteria.function);
     result.criteria.name = normalizeNameCriterion(result.criteria.name);
     
-    // Enforce single primary criterion rule
-    enforcePrimaryCriterion(result);
+    // Enforce confidence levels only
+    enforceConfidenceLevels(result);
     
     return result;
 }
 
-// Normalize individual criterion
-function normalizeCriterion(criterion, validTypes) {
+// Normalize individual criterion - accept AI's types
+function normalizeCriterionOpen(criterion) {
     if (!criterion) {
         return { type: null, keywords: [], confidence: 0.0 };
     }
     
     return {
-        type: validTypes.includes(criterion.type) ? criterion.type : null,
+        type: criterion.type || null, // Keep AI's type as-is
         keywords: Array.isArray(criterion.keywords) ? criterion.keywords.slice(0, 3) : [],
         confidence: typeof criterion.confidence === 'number' ? Math.max(0, Math.min(1, criterion.confidence)) : 0.0
     };
@@ -286,31 +286,19 @@ function normalizeNameCriterion(criterion) {
     };
 }
 
-// Enforce single primary criterion rule
-function enforcePrimaryCriterion(result) {
+// Enforce confidence levels without changing primary criterion
+function enforceConfidenceLevels(result) {
     const primaryType = result.primary_criterion;
     
-    // Reduce confidence of non-primary criteria
-    for (const [criterionName, criterion] of Object.entries(result.criteria)) {
-        if (criterionName !== primaryType && criterion.confidence > 0.5) {
-            criterion.confidence = Math.min(0.5, criterion.confidence);
-        }
-        
-        // Ensure primary criterion has reasonable confidence
-        if (criterionName === primaryType && criterion.confidence < 0.7) {
-            criterion.confidence = Math.max(0.7, criterion.confidence);
-        }
+    // Ensure primary criterion has high confidence
+    if (result.criteria[primaryType] && result.criteria[primaryType].confidence < 0.7) {
+        result.criteria[primaryType].confidence = Math.max(0.7, result.criteria[primaryType].confidence);
     }
     
-    // If primary criterion has null type, try to fix it
-    if (result.criteria[primaryType]?.type === null || !result.criteria[primaryType]?.type) {
-        if (primaryType === 'name') {
-            // Name criterion doesn't need a type
-            result.criteria.name.confidence = 0.8;
-        } else {
-            // Switch to name as fallback
-            result.primary_criterion = 'name';
-            result.criteria.name.confidence = 0.8;
+    // Reduce confidence of non-primary criteria if they're too high
+    for (const [criterionName, criterion] of Object.entries(result.criteria)) {
+        if (criterionName !== primaryType && criterion.confidence > 0.9) {
+            criterion.confidence = Math.min(0.8, criterion.confidence);
         }
     }
 }
