@@ -32,9 +32,9 @@ export async function onRequestPost(context) {
                 messages: [
                     {
                         role: "system",
-                        content: `You are a Unicode character search expert. Analyze user queries to determine the best search criteria.
+                        content: `You are a Unicode character search expert. Analyze user queries to determine the SINGLE BEST search criterion.
 
-Your task is to classify the query into EXACTLY ONE PRIMARY criterion and optionally additional supporting criteria. 
+Your task is to classify the query into EXACTLY ONE PRIMARY criterion ONLY. Do NOT create multiple criteria.
 
 Return EXACTLY this JSON structure:
 {
@@ -43,40 +43,47 @@ Return EXACTLY this JSON structure:
     "range": {
       "type": "emoji|math|arrows|geometric|punctuation|currency|symbols|null",
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0-1.0
+      "confidence": 0.0|1.0
     },
     "shape": {
       "type": "circle|square|triangle|star|heart|diamond|arrow|line|cross|null",
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0-1.0
+      "confidence": 0.0|1.0
     },
     "function": {
       "type": "separator|punctuation|currency|math_operator|emphasis|decoration|null",
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0-1.0
+      "confidence": 0.0|1.0
     },
     "name": {
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0-1.0
+      "confidence": 0.0|1.0
     }
   }
 }
 
 CRITICAL RULES:
-1. Set EXACTLY ONE "primary_criterion" - the most important search method
-2. Only ONE criterion should have high confidence (0.7+)
-3. Others should have lower confidence (0.5 or less) if relevant at all
+1. Choose EXACTLY ONE "primary_criterion" - the most important search method
+2. Set confidence to 1.0 ONLY for the primary criterion
+3. Set confidence to 0.0 for ALL other criteria
 4. Set "type" to "null" for criteria that don't apply
 5. Use English keywords only, even if query is in another language
-6. "keywords" should be 1-3 most relevant English terms
-7. Be precise with shape classifications - only use if query explicitly mentions visual appearance
+6. "keywords" should be 1-3 most relevant English terms for the PRIMARY criterion only
+7. Only use "shape" if query explicitly mentions VISUAL APPEARANCE or LOOKS LIKE something
+
+DECISION PRIORITY:
+1. If query mentions "looks like", "similar to", "shape of", "모양" → PRIMARY: shape
+2. If query mentions specific Unicode ranges (emoji, math, etc.) → PRIMARY: range  
+3. If query mentions specific functions (punctuation, currency, etc.) → PRIMARY: function
+4. Everything else → PRIMARY: name
 
 EXAMPLES:
-- "heart symbol" → primary: shape (heart), secondary: name
-- "mathematical plus sign" → primary: range (math), secondary: function  
-- "red circle emoji" → primary: range (emoji), secondary: shape
-- "punctuation marks" → primary: function (punctuation)
-- "Japanese character that looks like ㅊ" → primary: shape, secondary: name
+- "heart symbol" → PRIMARY: name (searching by name "heart")
+- "heart shaped character" → PRIMARY: shape (searching by visual heart shape)
+- "mathematical plus sign" → PRIMARY: range (math symbols)
+- "punctuation marks" → PRIMARY: function (punctuation function)
+- "나무 모양" → PRIMARY: shape (visual tree shape)
+- "tree character" → PRIMARY: name (searching by name "tree")
 
 Respond with ONLY the JSON, no additional text.`
                     },
