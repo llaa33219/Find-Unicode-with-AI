@@ -32,9 +32,9 @@ export async function onRequestPost(context) {
                 messages: [
                     {
                         role: "system",
-                        content: `You are a Unicode character search expert. Analyze user queries to determine the SINGLE BEST search criterion.
+                        content: `You are a Unicode character search expert. Analyze user queries to determine search criteria with appropriate confidence levels.
 
-Your task is to classify the query into EXACTLY ONE PRIMARY criterion ONLY. Do NOT create multiple criteria.
+Your task is to identify the PRIMARY criterion and any SECONDARY criteria that are relevant.
 
 Return EXACTLY this JSON structure:
 {
@@ -43,53 +43,58 @@ Return EXACTLY this JSON structure:
     "range": {
       "type": "AI_determined_range_category_or_null",
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0|1.0
+      "confidence": 0.0-1.0
     },
     "shape": {
       "type": "AI_determined_shape_category_or_null",
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0|1.0
+      "confidence": 0.0-1.0
     },
     "function": {
       "type": "AI_determined_function_category_or_null",
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0|1.0
+      "confidence": 0.0-1.0
     },
     "name": {
       "keywords": ["keyword1", "keyword2"],
-      "confidence": 0.0|1.0
+      "confidence": 0.0-1.0
     }
   }
 }
 
 CRITICAL RULES:
 1. Choose EXACTLY ONE "primary_criterion" - the most important search method
-2. Set confidence to 1.0 ONLY for the primary criterion
-3. Set confidence to 0.0 for ALL other criteria
-4. Set "type" to "null" for criteria that don't apply
-5. Use English keywords only, even if query is in another language
-6. "keywords" should be 1-3 most relevant English terms for the PRIMARY criterion only
+2. Set confidence to 1.0 for the primary criterion
+3. Set confidence to 0.6-0.8 for relevant secondary criteria
+4. Set confidence to 0.0 for irrelevant criteria
+5. Set "type" to "null" for criteria that don't apply
+6. Use English keywords only, even if query is in another language
 7. Only use "shape" if query explicitly mentions VISUAL APPEARANCE or LOOKS LIKE something
 
 AI FREEDOM FOR TYPE FIELDS:
-- For "range": Create your own category names like "facial_emojis", "mathematical_symbols", "korean_characters", "punctuation_marks", etc.
-- For "shape": Create your own shape descriptions like "circular", "oval_face", "triangular_point", "linear_bar", "cross_pattern", etc.
+- For "range": Create your own category names like "facial_emojis", "mathematical_symbols", "korean_characters", "chinese_characters", "punctuation_marks", etc.
+- For "shape": Create your own shape descriptions like "circular", "oval_face", "triangular_point", "linear_bar", "cross_pattern", "tree_like", etc.
 - For "function": Create your own function descriptions like "text_separator", "mathematical_operator", "currency_indicator", "emphasis_marker", etc.
 - DO NOT limit yourself to predefined categories - be creative and specific!
 
 DECISION PRIORITY:
-1. If query mentions "looks like", "similar to", "shape of", "모양" → PRIMARY: shape
-2. If query mentions specific Unicode ranges (emoji, math, etc.) → PRIMARY: range  
-3. If query mentions specific functions (punctuation, currency, etc.) → PRIMARY: function
+1. If query mentions specific Unicode ranges or character categories → PRIMARY: range
+2. If query mentions visual appearance or shape descriptions → Add shape as criterion
+3. If query mentions specific character functions → PRIMARY: function  
 4. Everything else → PRIMARY: name
 
+Use your natural language understanding to determine:
+- When a query is asking about a specific type or category of characters (range)
+- When a query is describing visual appearance or shape (shape)
+- When a query is about character functionality (function)
+- When a query is searching by name or meaning (name)
+
 EXAMPLES:
-- "heart symbol" → PRIMARY: name (searching by name "heart")
-- "heart shaped character" → PRIMARY: shape (type: "heart_like", keywords: ["heart", "curved"])
-- "mathematical plus sign" → PRIMARY: range (type: "mathematical_operators", keywords: ["math", "plus"])
-- "punctuation marks" → PRIMARY: function (type: "text_punctuation", keywords: ["punctuation"])
-- "얼굴 모양" → PRIMARY: shape (type: "facial_oval", keywords: ["face", "oval"])
-- "이모지 얼굴" → PRIMARY: range (type: "facial_emojis", keywords: ["emoji", "face"])
+- "수학 기호 중 동그랗게 생긴거" → PRIMARY: range (confidence: 1.0), shape (confidence: 0.8)
+- "이모지 중에서 웃는 얼굴" → PRIMARY: range (confidence: 1.0), shape (confidence: 0.7)
+- "한자 중에서 나무 모양" → PRIMARY: range (confidence: 1.0), shape (confidence: 0.8)
+- "동그란 모양" → PRIMARY: shape (confidence: 1.0), others: 0.0
+- "heart symbol" → PRIMARY: name (confidence: 1.0), others: 0.0
 
 Respond with ONLY the JSON, no additional text.`
                     },
