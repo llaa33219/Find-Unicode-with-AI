@@ -1,12 +1,12 @@
-// 분석 결과를 바탕으로 유니코드 문자를 검색하는 API
+// Search for Unicode characters based on analysis results + AI recommendations
 export async function onRequestPost(context) {
     try {
-        const { request } = context;
+        const { request, env } = context;
         const body = await request.json();
         
         console.log('Search API received:', body);
         
-        const { criteria } = body;
+        const { criteria, query } = body;
 
         if (!criteria || typeof criteria !== 'object') {
             console.error('Invalid criteria:', criteria);
@@ -23,40 +23,53 @@ export async function onRequestPost(context) {
             });
         }
 
-        let allCandidates = [];
+        let searchCandidates = [];
 
-        // Search by each criterion
+        // Step 1: Search by each criterion from analysis
         if (criteria.range && criteria.range.type) {
             console.log('Searching by range:', criteria.range);
             const candidates = searchByRange(criteria.range);
-            allCandidates = allCandidates.concat(candidates);
+            searchCandidates = searchCandidates.concat(candidates);
         }
 
         if (criteria.shape && criteria.shape.type) {
             console.log('Searching by shape:', criteria.shape);
             const candidates = searchByShape(criteria.shape);
-            allCandidates = allCandidates.concat(candidates);
+            searchCandidates = searchCandidates.concat(candidates);
         }
 
         if (criteria.function && criteria.function.type) {
             console.log('Searching by function:', criteria.function);
             const candidates = searchByFunction(criteria.function);
-            allCandidates = allCandidates.concat(candidates);
+            searchCandidates = searchCandidates.concat(candidates);
         }
 
         if (criteria.name && criteria.name.keywords && criteria.name.keywords.length > 0) {
             console.log('Searching by name:', criteria.name);
             const candidates = searchByName(criteria.name);
-            allCandidates = allCandidates.concat(candidates);
+            searchCandidates = searchCandidates.concat(candidates);
         }
 
-        // Remove duplicates (based on Unicode code point)
+        console.log('Search results count:', searchCandidates.length);
+
+        // Step 2: Get AI recommendations (always, regardless of search results)
+        console.log('Getting AI recommendations...');
+        const aiRecommendations = await getAIRecommendations(query, env);
+        
+        console.log('AI recommendations count:', aiRecommendations.length);
+
+        // Step 3: Combine search results + AI recommendations
+        const allCandidates = [...searchCandidates, ...aiRecommendations];
+
+        // Step 4: Remove duplicates (based on Unicode code point)
         const uniqueCandidates = removeDuplicates(allCandidates);
         
-        // Limit to maximum 50 results
+        // Step 5: Limit to maximum 50 results for filtering
         const limitedCandidates = uniqueCandidates.slice(0, 50);
         
-        console.log('Search results:', { 
+        console.log('Final candidates:', { 
+            search: searchCandidates.length,
+            ai: aiRecommendations.length,
             total: uniqueCandidates.length, 
             limited: limitedCandidates.length,
             first3: limitedCandidates.slice(0, 3)
@@ -64,7 +77,12 @@ export async function onRequestPost(context) {
 
         return new Response(JSON.stringify({
             results: limitedCandidates,
-            total: uniqueCandidates.length
+            total: uniqueCandidates.length,
+            breakdown: {
+                search_results: searchCandidates.length,
+                ai_recommendations: aiRecommendations.length,
+                after_dedup: uniqueCandidates.length
+            }
         }), {
             headers: { 
                 'Content-Type': 'application/json',
@@ -89,6 +107,70 @@ export async function onRequestPost(context) {
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization'
             }
         });
+    }
+}
+
+// Get AI recommendations based on the original query
+async function getAIRecommendations(query, env) {
+    try {
+        const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: "qwen-turbo-latest",
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a Unicode character expert. Given a user query, recommend Unicode characters that match the description.
+
+Return EXACTLY this JSON structure:
+{
+  "recommendations": [
+    {
+      "char": "character",
+      "code": "U+XXXX", 
+      "name": "UNICODE CHARACTER NAME",
+      "reason": "why this character matches the query"
+    }
+  ]
+}
+
+Guidelines:
+- Recommend 10-20 characters that best match the query
+- Include both obvious and creative matches
+- Use proper Unicode format (U+XXXX)
+- Provide clear reasoning for each recommendation
+- Focus on characters that truly match the description
+
+Respond with ONLY the JSON, no additional text.`
+                    },
+                    {
+                        role: "user",
+                        content: `Find Unicode characters that match this description: "${query}"`
+                    }
+                ],
+                temperature: 0.4,
+                max_tokens: 1000
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI recommendation API error:', response.status);
+            return [];
+        }
+
+        const data = await response.json();
+        const content = data.choices[0].message.content.trim();
+        const result = JSON.parse(content);
+        
+        return result.recommendations || [];
+        
+    } catch (error) {
+        console.error('AI recommendation error:', error);
+        return [];
     }
 }
 
@@ -129,7 +211,7 @@ function searchByRange(rangeObj) {
             break;
         default:
             // Fallback: search by keywords
-            for (const keyword of keywords) {
+            for (const keyword of keywords || []) {
                 candidates.push(...searchByNamePattern(keyword));
             }
     }
@@ -166,7 +248,7 @@ function searchByShape(shapeObj) {
             break;
         default:
             // Fallback: search by keywords
-            for (const keyword of keywords) {
+            for (const keyword of keywords || []) {
                 candidates.push(...searchByNamePattern(keyword));
             }
     }
@@ -195,7 +277,7 @@ function searchByFunction(functionObj) {
             break;
         default:
             // Fallback: search by keywords
-            for (const keyword of keywords) {
+            for (const keyword of keywords || []) {
                 candidates.push(...searchByNamePattern(keyword));
             }
     }
@@ -208,7 +290,7 @@ function searchByName(nameObj) {
     const { keywords } = nameObj;
     const candidates = [];
     
-    for (const keyword of keywords) {
+    for (const keyword of keywords || []) {
         candidates.push(...searchByNamePattern(keyword));
     }
     
@@ -248,7 +330,7 @@ function getEmojiCharacters() {
         { char: '💚', code: 'U+1F49A', name: 'GREEN HEART' },
         { char: '💙', code: 'U+1F499', name: 'BLUE HEART' },
         { char: '💜', code: 'U+1F49C', name: 'PURPLE HEART' },
-        { char: '🤍', code: 'U+1F90D', name: 'WHITE HEART' },
+        { char: '��', code: 'U+1F90D', name: 'WHITE HEART' },
         { char: '🖤', code: 'U+1F5A4', name: 'BLACK HEART' },
         { char: '🤎', code: 'U+1F90E', name: 'BROWN HEART' },
         { char: '💕', code: 'U+1F495', name: 'TWO HEARTS' },

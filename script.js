@@ -37,8 +37,8 @@ async function handleSearch() {
         
         showProgress('Searching Unicode database...', 40);
         
-        // Step 2: Search by criteria
-        const searchResults = await searchUnicode(analysisResult);
+        // Step 2: Search by criteria + AI recommendations
+        const searchResults = await searchUnicode(analysisResult, query);
         
         showProgress('AI filtering results...', 70);
         
@@ -86,14 +86,17 @@ async function analyzeQuery(query) {
 }
 
 // Step 2: Search Unicode database
-async function searchUnicode(criteria) {
+async function searchUnicode(criteria, query) {
     try {
         const response = await fetch('/api/search', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ criteria })
+            body: JSON.stringify({ 
+                criteria: criteria.criteria || criteria,
+                query: query  // Pass original query for AI recommendations
+            })
         });
 
         if (!response.ok) {
@@ -118,7 +121,11 @@ async function filterResults(candidates, criteria, query) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ candidates, criteria, query })
+            body: JSON.stringify({ 
+                candidates: candidates,
+                query: query,
+                criteria: criteria
+            })
         });
 
         if (!response.ok) {
@@ -138,53 +145,51 @@ async function filterResults(candidates, criteria, query) {
 // Display analysis results
 function displayAnalysis(analysis) {
     const activeCriteria = [];
+    const criteria = analysis.criteria || {};
+    const primaryCriterion = analysis.primary_criterion;
     
-    // Check each criteria type
-    if (analysis.range && analysis.range.type) {
-        activeCriteria.push({
-            type: 'Range',
-            title: analysis.range.title,
-            description: analysis.range.description,
-            keywords: analysis.range.keywords
-        });
-    }
-    
-    if (analysis.shape && analysis.shape.type) {
-        activeCriteria.push({
-            type: 'Shape',
-            title: analysis.shape.title,
-            description: analysis.shape.description,
-            keywords: analysis.shape.keywords
-        });
-    }
-    
-    if (analysis.function && analysis.function.type) {
-        activeCriteria.push({
-            type: 'Function',
-            title: analysis.function.title,
-            description: analysis.function.description,
-            keywords: analysis.function.keywords
-        });
-    }
-    
-    if (analysis.name && analysis.name.keywords && analysis.name.keywords.length > 0) {
-        activeCriteria.push({
-            type: 'Name',
-            title: analysis.name.title,
-            description: analysis.name.description,
-            keywords: analysis.name.keywords
-        });
-    }
+    // Check each criteria type with new structure
+    Object.entries(criteria).forEach(([key, criterion]) => {
+        if (criterion.confidence > 0.3) {  // Only show criteria with decent confidence
+            const displayNames = {
+                'range': '범위 검색',
+                'shape': '모양 검색', 
+                'function': '기능 검색',
+                'name': '이름 검색'
+            };
+            
+            activeCriteria.push({
+                type: key,
+                title: displayNames[key] || key,
+                description: criterion.type ? `유형: ${criterion.type}` : '키워드 기반 검색',
+                keywords: criterion.keywords || [],
+                confidence: criterion.confidence,
+                isPrimary: key === primaryCriterion
+            });
+        }
+    });
+
+    // Sort by confidence (primary first, then by confidence)
+    activeCriteria.sort((a, b) => {
+        if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+        return b.confidence - a.confidence;
+    });
 
     analysisResults.innerHTML = activeCriteria.map(criterion => `
-        <div class="criteria-item">
-            <h4>${criterion.title}</h4>
+        <div class="criteria-item ${criterion.isPrimary ? 'primary' : ''}">
+            <h4>${criterion.title} ${criterion.isPrimary ? '(주요)' : ''}</h4>
             <p>${criterion.description}</p>
-            <div class="keywords">
-                ${criterion.keywords.map(keyword => 
-                    `<span class="keyword">${keyword}</span>`
-                ).join('')}
+            <div class="confidence-bar">
+                <div class="confidence-fill" style="width: ${criterion.confidence * 100}%"></div>
+                <span class="confidence-text">신뢰도: ${(criterion.confidence * 100).toFixed(0)}%</span>
             </div>
+            ${criterion.keywords.length > 0 ? `
+                <div class="keywords">
+                    ${criterion.keywords.map(keyword => 
+                        `<span class="keyword">${keyword}</span>`
+                    ).join('')}
+                </div>
+            ` : ''}
         </div>
     `).join('');
 
@@ -194,30 +199,45 @@ function displayAnalysis(analysis) {
 // Display final results
 function displayResults(results) {
     if (!results || results.length === 0) {
-        resultsContainer.innerHTML = '<p class="no-results">No matching characters found. Try a different search term.</p>';
+        resultsContainer.innerHTML = '<p class="no-results">검색 결과가 없습니다. 다른 검색어로 시도해보세요.</p>';
         resultsSection.style.display = 'block';
         return;
     }
 
-    resultsContainer.innerHTML = results.map((result, index) => `
-        <div class="result-item">
-            <div class="result-header">
-                <div class="result-char">${result.char}</div>
-                <div class="result-info">
-                    <h4>${result.name}</h4>
-                    <div class="unicode-code">${result.code}</div>
+    resultsContainer.innerHTML = results.map((result, index) => {
+        // Handle both old and new result formats
+        const score = result.score || (result.relevance_score + result.visual_match_score) / 20 || 0;
+        const reason = result.reason || result.analysis || 'No description available';
+        
+        return `
+            <div class="result-item">
+                <div class="result-header">
+                    <div class="result-rank">${index + 1}</div>
+                    <div class="result-char">${result.char}</div>
+                    <div class="result-info">
+                        <h4>${result.name}</h4>
+                        <div class="unicode-code">${result.code}</div>
+                    </div>
+                </div>
+                <div class="result-scores">
+                    <div class="score-bar">
+                        <div class="score-fill" style="width: ${score * 100}%"></div>
+                        <span class="score-text">점수: ${(score * 10).toFixed(1)}/10</span>
+                    </div>
+                    ${result.match_types ? `
+                        <div class="match-types">매치 유형: ${result.match_types.join(', ')}</div>
+                    ` : ''}
+                </div>
+                <div class="result-description">${reason}</div>
+                ${result.visual_features ? `
+                    <div class="visual-features"><strong>시각적 특징:</strong> ${result.visual_features}</div>
+                ` : ''}
+                <div class="result-actions">
+                    <button class="copy-btn" data-char="${result.char}" data-index="${index}">문자 복사</button>
                 </div>
             </div>
-            <div class="result-scores">
-                <span class="score">Relevance: ${result.relevance_score}/10</span>
-                <span class="score">Visual: ${result.visual_match_score}/10</span>
-            </div>
-            <div class="result-description">${result.analysis}</div>
-            <div class="result-actions">
-                <button class="copy-btn" data-char="${result.char}" data-index="${index}">문자 복사</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Add event listeners to copy buttons
     const copyButtons = resultsContainer.querySelectorAll('.copy-btn');

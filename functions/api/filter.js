@@ -6,110 +6,16 @@ export async function onRequestPost(context) {
     
     console.log('Filter API received:', body);
     
-    const { candidates, criteria, query } = body;
-    
-    if (!Array.isArray(candidates) || candidates.length === 0) {
-      console.error('Invalid candidates:', candidates);
-      return new Response(JSON.stringify({ 
-        error: 'Candidates array is required and must not be empty' 
-      }), { 
-        status: 400, 
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        } 
-      });
-    }
+    const { candidates, query, criteria } = body;
 
-    if (!query || typeof query !== 'string') {
-      console.error('Invalid query:', query);
-      return new Response(JSON.stringify({ 
-        error: 'Query is required and must be a string' 
-      }), { 
-        status: 400, 
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        } 
-      });
-    }
-
-    // Check if this is a shape-related query for enhanced analysis
-    const isShapeQuery = criteria?.shape?.type && criteria.shape.type !== null;
-    const model = isShapeQuery ? "qwen-vl-plus-latest" : "qwen-turbo-latest";
-    
-    console.log('Using model:', model, 'for shape query:', isShapeQuery);
-
-    let messages = [
-      {
-        role: "system",
-        content: `You are a Unicode character expert. Your task is to filter and analyze Unicode characters based on user queries.
-
-Given a list of Unicode character candidates and the original user query, select the TOP 10 most relevant characters and provide detailed analysis.
-
-Return EXACTLY this JSON structure:
-{
-  "results": [
-    {
-      "char": "character",
-      "code": "U+XXXX",
-      "name": "UNICODE CHARACTER NAME",
-      "relevance_score": 0-10,
-      "visual_match_score": 0-10,
-      "analysis": "detailed explanation of why this character matches the query"
-    }
-  ]
-}
-
-Scoring guidelines:
-- relevance_score: How well the character matches the semantic meaning of the query (0-10)
-- visual_match_score: How well the character matches the visual description (0-10)
-- Select exactly 10 characters (or fewer if less than 10 candidates provided)
-- Order by combined relevance and visual match scores
-- Provide specific analysis explaining the match
-
-Respond with ONLY the JSON, no additional text.`
-      },
-      {
-        role: "user",
-        content: `Original query: "${query}"
-
-Search criteria: ${JSON.stringify(criteria || {})}
-
-Candidates to filter and analyze:
-${candidates.map(c => `${c.char} (${c.code}) - ${c.name}`).join('\n')}
-
-Please select the top 10 most relevant characters and provide detailed analysis for each.`
-      }
-    ];
-
-    // Use official Qwen DashScope API
-    const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.2,
-        max_tokens: 2000
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Qwen API error:', response.status, errorText);
-      // Fallback to basic filtering
+    if (!candidates || !Array.isArray(candidates)) {
+      console.log('No candidates provided, returning enhanced recommendations');
+      const recommendations = await getEnhancedRecommendations(query, env);
       return new Response(JSON.stringify({
-        results: getBasicFilteredResults(candidates, query)
+        results: recommendations,
+        total: recommendations.length,
+        fallback: true
       }), {
-        status: 200,
         headers: { 
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
@@ -119,38 +25,46 @@ Please select the top 10 most relevant characters and provide detailed analysis 
       });
     }
 
-    const data = await response.json();
-    let filterResult;
-
-    try {
-      const content = data.choices[0].message.content.trim();
-      filterResult = JSON.parse(content);
-    } catch (parseError) {
-      console.error('Failed to parse Qwen response:', parseError);
-      filterResult = {
-        results: getBasicFilteredResults(candidates, query)
-      };
+    if (candidates.length === 0) {
+      console.log('Empty candidates array, returning enhanced recommendations');
+      const recommendations = await getEnhancedRecommendations(query, env);
+      return new Response(JSON.stringify({
+        results: recommendations,
+        total: recommendations.length,
+        fallback: true
+      }), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
+      });
     }
 
-    // Ensure we have valid results
-    if (!filterResult.results || !Array.isArray(filterResult.results)) {
-      filterResult = {
-        results: getBasicFilteredResults(candidates, query)
-      };
+    console.log('Processing candidates:', candidates.length);
+
+    // Determine if we need visual analysis (VL model)
+    const needsVisualAnalysis = isVisualAnalysisNeeded(criteria);
+    const modelToUse = needsVisualAnalysis ? 'qwen-vl-plus-latest' : 'qwen-turbo-latest';
+    
+    console.log('Using model:', modelToUse, 'for visual analysis:', needsVisualAnalysis);
+
+    let filteredResults;
+    if (needsVisualAnalysis) {
+      filteredResults = await filterWithVisualAnalysis(candidates, query, criteria, env, modelToUse);
+    } else {
+      filteredResults = await filterWithTextAnalysis(candidates, query, criteria, env, modelToUse);
     }
 
-    // Limit to 10 results and ensure proper format
-    filterResult.results = filterResult.results.slice(0, 10).map(result => ({
-      char: result.char || '?',
-      code: result.code || 'U+0000',
-      name: result.name || 'UNKNOWN',
-      relevance_score: Math.min(10, Math.max(0, result.relevance_score || 5)),
-      visual_match_score: Math.min(10, Math.max(0, result.visual_match_score || 5)),
-      analysis: result.analysis || 'Character matches the search criteria.'
-    }));
+    console.log('Filtered results:', filteredResults.length);
 
-    return new Response(JSON.stringify(filterResult), {
-      status: 200,
+    return new Response(JSON.stringify({
+      results: filteredResults,
+      total: filteredResults.length,
+      model_used: modelToUse,
+      visual_analysis: needsVisualAnalysis
+    }), {
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -162,12 +76,11 @@ Please select the top 10 most relevant characters and provide detailed analysis 
   } catch (error) {
     console.error('Filter error:', error);
     
-    // Return basic filtered results as fallback
-    const fallbackResults = candidates ? getBasicFilteredResults(candidates.slice(0, 10), query || '') : [];
     return new Response(JSON.stringify({
-      results: fallbackResults
+      error: 'Filter processing failed',
+      details: error.message
     }), {
-      status: 200,
+      status: 500,
       headers: { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -178,64 +91,277 @@ Please select the top 10 most relevant characters and provide detailed analysis 
   }
 }
 
+// Determine if visual analysis is needed
+function isVisualAnalysisNeeded(criteria) {
+  if (!criteria) return false;
+  
+  // Check if shape is the primary criterion or has high confidence
+  if (criteria.primary_criterion === 'shape') return true;
+  if (criteria.criteria?.shape?.confidence > 0.6) return true;
+  
+  // Check for specific visual keywords
+  const allKeywords = [];
+  Object.values(criteria.criteria || {}).forEach(criterion => {
+    if (criterion.keywords) allKeywords.push(...criterion.keywords);
+  });
+  
+  const visualKeywords = ['looks', 'similar', 'shape', 'appearance', 'visual', 'circle', 'square', 'triangle', 'round'];
+  return visualKeywords.some(keyword => 
+    allKeywords.some(k => k.toLowerCase().includes(keyword))
+  );
+}
+
+// Filter with visual analysis using VL model
+async function filterWithVisualAnalysis(candidates, query, criteria, env, model) {
+  try {
+    // Create visual representation of characters for analysis
+    const charactersForAnalysis = candidates.slice(0, 30).map(c => c.char).join('  ');
+    
+    const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: "system",
+            content: `You are a Unicode character visual analysis expert. You will analyze characters visually to determine which ones best match the user's description.
+
+Given a list of Unicode characters and a query, rank them by visual similarity to what the user is looking for.
+
+Return EXACTLY this JSON structure:
+{
+  "results": [
+    {
+      "char": "character",
+      "code": "U+XXXX",
+      "name": "UNICODE CHARACTER NAME", 
+      "score": 0.0-1.0,
+      "reason": "why this character matches visually",
+      "visual_features": "specific visual characteristics"
+    }
+  ]
+}
+
+Guidelines for visual analysis:
+- Focus on actual visual appearance of the characters
+- Consider shape, proportions, visual similarity
+- Score based on how well the visual matches the query
+- Only include characters with score > 0.3
+- Prioritize characters that visually look like what's described
+- Be strict about visual matching - if it doesn't look similar, score it low
+- Limit results to top 10 best visual matches
+
+Respond with ONLY the JSON, no additional text.`
+          },
+          {
+            role: "user",
+            content: `Analyze these Unicode characters and find the ones that visually match this description: "${query}"
+
+Characters to analyze: ${charactersForAnalysis}
+
+Here are the character details:
+${candidates.slice(0, 30).map(c => `${c.char} (${c.code}) - ${c.name}`).join('\n')}`
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 1500
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Visual analysis API error:', response.status);
+      return await filterWithTextAnalysis(candidates, query, criteria, env, 'qwen-turbo-latest');
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content.trim();
+    const result = JSON.parse(content);
+    
+    return result.results || [];
+    
+  } catch (error) {
+    console.error('Visual analysis error:', error);
+    return await filterWithTextAnalysis(candidates, query, criteria, env, 'qwen-turbo-latest');
+  }
+}
+
+// Filter with text-based analysis
+async function filterWithTextAnalysis(candidates, query, criteria, env, model) {
+  try {
+    const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: "system",
+            content: `You are a Unicode character filtering expert. Given a list of candidate Unicode characters and a user query, select and rank the TOP 10 characters that best match the query.
+
+Return EXACTLY this JSON structure:
+{
+  "results": [
+    {
+      "char": "character",
+      "code": "U+XXXX",
+      "name": "UNICODE CHARACTER NAME",
+      "score": 0.0-1.0,
+      "reason": "detailed explanation of why this character matches the query",
+      "match_types": ["exact_name", "semantic", "visual", "functional"]
+    }
+  ]
+}
+
+CRITICAL FILTERING RULES:
+1. Only return characters that TRULY match the query description
+2. Be strict about range boundaries - if query asks for math symbols, don't include emojis
+3. For shape queries, prioritize characters that visually look like the described shape
+4. For function queries, ensure characters actually serve that purpose
+5. Score based on relevance: 0.9+ (perfect match), 0.7-0.8 (very good), 0.5-0.6 (decent), <0.5 (poor)
+6. Maximum 10 results, ordered by score (highest first)
+7. Include detailed reasoning for each selection
+8. If criteria specify a primary search type, prioritize that heavily
+
+Primary search criterion: ${criteria?.primary_criterion || 'name'}
+
+Respond with ONLY the JSON, no additional text.`
+          },
+          {
+            role: "user",
+            content: `Filter these Unicode characters to find the TOP 10 that best match: "${query}"
+
+Search criteria: ${JSON.stringify(criteria)}
+
+Candidate characters:
+${candidates.map(c => `${c.char} (${c.code}) - ${c.name}`).join('\n')}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Text analysis API error:', response.status);
+      return candidates.slice(0, 10).map(c => ({
+        ...c,
+        score: 0.5,
+        reason: 'Fallback result due to API error'
+      }));
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content.trim();
+    const result = JSON.parse(content);
+    
+    return result.results || [];
+    
+  } catch (error) {
+    console.error('Text analysis error:', error);
+    return candidates.slice(0, 10).map(c => ({
+      ...c,
+      score: 0.5,
+      reason: 'Fallback result due to parsing error'
+    }));
+  }
+}
+
+// Get enhanced recommendations when no candidates are provided
+async function getEnhancedRecommendations(query, env) {
+  try {
+    const response = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "qwen-turbo-latest",
+        messages: [
+          {
+            role: "system",
+            content: `You are a Unicode character expert. When given a query, provide the most relevant Unicode characters.
+
+Return EXACTLY this JSON structure:
+{
+  "results": [
+    {
+      "char": "character",
+      "code": "U+XXXX",
+      "name": "UNICODE CHARACTER NAME",
+      "score": 0.0-1.0,
+      "reason": "why this character matches the query"
+    }
+  ]
+}
+
+Guidelines:
+- Provide 10-15 characters that best match the query
+- Include both obvious and creative matches
+- Use proper Unicode format (U+XXXX)
+- Score based on relevance to the query
+- Focus on characters that truly match the description
+- Order by relevance (highest score first)
+
+Respond with ONLY the JSON, no additional text.`
+          },
+          {
+            role: "user", 
+            content: `Find Unicode characters that match this description: "${query}"`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 1200
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Enhanced recommendations API error:', response.status);
+      return getStaticFallbackResults();
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content.trim();
+    const result = JSON.parse(content);
+    
+    return result.results || getStaticFallbackResults();
+    
+  } catch (error) {
+    console.error('Enhanced recommendations error:', error);
+    return getStaticFallbackResults();
+  }
+}
+
+// Static fallback results when all else fails
+function getStaticFallbackResults() {
+  return [
+    { char: '●', code: 'U+25CF', name: 'BLACK CIRCLE', score: 0.7, reason: 'Common geometric shape' },
+    { char: '○', code: 'U+25CB', name: 'WHITE CIRCLE', score: 0.7, reason: 'Common geometric shape' },
+    { char: '■', code: 'U+25A0', name: 'BLACK SQUARE', score: 0.7, reason: 'Common geometric shape' },
+    { char: '□', code: 'U+25A1', name: 'WHITE SQUARE', score: 0.7, reason: 'Common geometric shape' },
+    { char: '▲', code: 'U+25B2', name: 'BLACK UP-POINTING TRIANGLE', score: 0.7, reason: 'Common geometric shape' },
+    { char: '★', code: 'U+2605', name: 'BLACK STAR', score: 0.7, reason: 'Common symbol' },
+    { char: '❤️', code: 'U+2764', name: 'RED HEART', score: 0.7, reason: 'Popular symbol' },
+    { char: '✅', code: 'U+2705', name: 'CHECK MARK BUTTON', score: 0.6, reason: 'Common checkmark' },
+    { char: '❌', code: 'U+274C', name: 'CROSS MARK', score: 0.6, reason: 'Common x mark' },
+    { char: '😀', code: 'U+1F600', name: 'GRINNING FACE', score: 0.6, reason: 'Common emoji' }
+  ];
+}
+
 // CORS 처리를 위한 OPTIONS 핸들러
 export async function onRequestOptions() {
   return new Response(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     }
-  });
-}
-
-function getBasicFilteredResults(candidates, query) {
-  if (!Array.isArray(candidates)) return [];
-  
-  const lowerQuery = query.toLowerCase();
-  
-  // Simple scoring based on name similarity and common patterns
-  return candidates.slice(0, 10).map(candidate => {
-    const name = (candidate.name || '').toLowerCase();
-    let relevanceScore = 5; // base score
-    let visualScore = 5;
-    
-    // Check if query terms appear in the name
-    const queryWords = lowerQuery.split(/\s+/);
-    const matchingWords = queryWords.filter(word => 
-      word.length > 2 && name.includes(word)
-    );
-    
-    relevanceScore += matchingWords.length * 2;
-    
-    // Boost scores for exact matches
-    if (name.includes(lowerQuery)) {
-      relevanceScore += 3;
-    }
-    
-    // Shape-based scoring
-    if (lowerQuery.includes('circle') && name.includes('circle')) visualScore += 3;
-    if (lowerQuery.includes('square') && name.includes('square')) visualScore += 3;
-    if (lowerQuery.includes('triangle') && name.includes('triangle')) visualScore += 3;
-    if (lowerQuery.includes('star') && name.includes('star')) visualScore += 3;
-    if (lowerQuery.includes('heart') && name.includes('heart')) visualScore += 3;
-    if (lowerQuery.includes('arrow') && name.includes('arrow')) visualScore += 3;
-    
-    // Cap scores at 10
-    relevanceScore = Math.min(10, relevanceScore);
-    visualScore = Math.min(10, visualScore);
-    
-    return {
-      char: candidate.char || '?',
-      code: candidate.code || 'U+0000',
-      name: candidate.name || 'UNKNOWN',
-      relevance_score: relevanceScore,
-      visual_match_score: visualScore,
-      analysis: `Character matches query "${query}" with ${matchingWords.length} matching terms in the name.`
-    };
-  }).sort((a, b) => {
-    const scoreA = a.relevance_score + a.visual_match_score;
-    const scoreB = b.relevance_score + b.visual_match_score;
-    return scoreB - scoreA;
   });
 } 
