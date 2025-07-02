@@ -34,6 +34,8 @@ export async function onRequestPost(context) {
                         role: "system",
                         content: `You are a Unicode character search expert. Analyze user queries to determine search criteria with appropriate confidence levels.
 
+CRITICAL: Process everything in English internally, regardless of the input language.
+
 Your task is to identify the PRIMARY criterion and any SECONDARY criteria that are relevant.
 
 Return EXACTLY this JSON structure:
@@ -41,22 +43,22 @@ Return EXACTLY this JSON structure:
   "primary_criterion": "range|shape|function|name",
   "criteria": {
     "range": {
-      "type": "AI_determined_range_category_or_null",
-      "keywords": ["keyword1", "keyword2"],
+      "type": "actual_unicode_block_name_or_null",
+      "keywords": ["english_keyword1", "english_keyword2"],
       "confidence": 0.0-1.0
     },
     "shape": {
-      "type": "AI_determined_shape_category_or_null",
-      "keywords": ["keyword1", "keyword2"],
+      "type": "english_shape_description_or_null",
+      "keywords": ["english_keyword1", "english_keyword2"],
       "confidence": 0.0-1.0
     },
     "function": {
-      "type": "AI_determined_function_category_or_null",
-      "keywords": ["keyword1", "keyword2"],
+      "type": "english_function_description_or_null",
+      "keywords": ["english_keyword1", "english_keyword2"],
       "confidence": 0.0-1.0
     },
     "name": {
-      "keywords": ["keyword1", "keyword2"],
+      "keywords": ["english_keyword1", "english_keyword2"],
       "confidence": 0.0-1.0
     }
   }
@@ -68,20 +70,14 @@ CRITICAL RULES:
 3. Set confidence to 0.6-0.8 for relevant secondary criteria
 4. Set confidence to 0.0 for irrelevant criteria
 5. Set "type" to "null" for criteria that don't apply
-6. Use English keywords only, even if query is in another language
-7. Only use "shape" if query explicitly mentions VISUAL APPEARANCE or LOOKS LIKE something
-
-AI FREEDOM FOR TYPE FIELDS:
-- For "range": Create your own category names like "facial_emojis", "mathematical_symbols", "korean_characters", "chinese_characters", "punctuation_marks", etc.
-- For "shape": Create your own shape descriptions like "circular", "oval_face", "triangular_point", "linear_bar", "cross_pattern", "tree_like", etc.
-- For "function": Create your own function descriptions like "text_separator", "mathematical_operator", "currency_indicator", "emphasis_marker", etc.
-- DO NOT limit yourself to predefined categories - be creative and specific!
+6. ALL keywords and types must be in English only
+7. For range "type", use actual Unicode block names when possible (e.g., "Mathematical Operators", "CJK Unified Ideographs", "Miscellaneous Symbols")
 
 DECISION PRIORITY:
 1. If query mentions specific Unicode ranges or character categories → PRIMARY: range
-2. If query mentions visual appearance or shape descriptions → Add shape as criterion
-3. If query mentions specific character functions → PRIMARY: function  
-4. Everything else → PRIMARY: name
+2. If query mentions visual appearance or shape descriptions → PRIMARY: shape (unless range is also mentioned)
+3. If query mentions specific character functions → PRIMARY: function
+4. If query is about character names, meanings, or contains specific name terms → PRIMARY: name
 
 Use your natural language understanding to determine:
 - When a query is asking about a specific type or category of characters (range)
@@ -90,11 +86,11 @@ Use your natural language understanding to determine:
 - When a query is searching by name or meaning (name)
 
 EXAMPLES:
-- "수학 기호 중 동그랗게 생긴거" → PRIMARY: range (confidence: 1.0), shape (confidence: 0.8)
-- "이모지 중에서 웃는 얼굴" → PRIMARY: range (confidence: 1.0), shape (confidence: 0.7)
-- "한자 중에서 나무 모양" → PRIMARY: range (confidence: 1.0), shape (confidence: 0.8)
-- "동그란 모양" → PRIMARY: shape (confidence: 1.0), others: 0.0
-- "heart symbol" → PRIMARY: name (confidence: 1.0), others: 0.0
+- "수학 기호 중 동그랗게 생긴거" → PRIMARY: range (type: "Mathematical Operators", keywords: ["math", "symbol"], confidence: 1.0), shape (type: "circular", keywords: ["round", "circle"], confidence: 0.8)
+- "이모지 중에서 웃는 얼굴" → PRIMARY: range (type: "Emoticons", keywords: ["emoji", "face"], confidence: 1.0), shape (type: "smiling", keywords: ["smile", "happy"], confidence: 0.7)
+- "한자 중에서 나무 모양" → PRIMARY: range (type: "CJK Unified Ideographs", keywords: ["chinese", "character"], confidence: 1.0), shape (type: "tree_like", keywords: ["tree", "wood"], confidence: 0.8)
+- "동그란 모양" → PRIMARY: shape (type: "circular", keywords: ["round", "circle"], confidence: 1.0)
+- "heart symbol" → PRIMARY: name (keywords: ["heart"], confidence: 1.0)
 
 Respond with ONLY the JSON, no additional text.`
                     },
